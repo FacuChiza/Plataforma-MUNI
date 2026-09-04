@@ -3,20 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GIS Municipal - Villa de Merlo</title>
-    
-    <!-- Dependencias de estilos y scripts -->
+    <title>Catastro Digital - Villa de Merlo</title>
+    <meta name="description" content="Visor catastral de la Municipalidad de Villa de Merlo, San Luis.">
+    <link rel="icon" href="img/escudoMerlo.jpg">
+
+    <!-- ==================================================================
+         DEPENDENCIAS EXTERNAS
+         Todas por CDN, sin paso de build. El sistema tiene que poder
+         mantenerse sin un desarrollador dedicado.
+
+         Tailwind se carga en su version de desarrollo: genera el CSS en el
+         navegador. Es lo que impide activar un Content-Security-Policy
+         estricto (ver la nota en server.js). Compilarlo a un .css estatico
+         es una mejora pendiente.
+         ================================================================== -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    
-    <link rel="stylesheet" href="app.css?v=9">
+
+    <!-- ==================================================================
+         ESTILOS Y LOGICA PROPIOS
+         El ?v= es control de version: al desplegar un cambio se sube el
+         numero para que ningun navegador siga usando la copia vieja.
+         ================================================================== -->
+    <link rel="stylesheet" href="app.css?v=10">
 </head>
 <body class="bg-slate-50 flex flex-col">
 
-    <!-- --- CABECERA PRINCIPAL --- -->
+    <!-- ==================================================================
+         CABECERA: escudo, titulo y buscador por padron
+         ================================================================== -->
     <header class="h-16 bg-emerald-950 text-white flex items-center justify-between px-6 shadow-lg z-[2000] relative">   
         <div class="flex items-center gap-4">
             <button onclick="toggleLayers()" class="p-2 hover:bg-emerald-800 rounded-none transition-colors">
@@ -40,7 +58,10 @@
     </header>
 
     <div class="flex flex-1 overflow-hidden relative">
-        <!-- --- CAJÓN DE CAPAS LATERAL (DRAWER) --- -->
+        <!-- ==============================================================
+             PANEL LATERAL: capas del mapa y filtros
+             Se abre y cierra con el boton de capas de la cabecera.
+             ============================================================== -->
         <aside id="layers-drawer" class="overflow-y-auto">
             <div class="p-6 space-y-6 flex flex-col h-full">
                 <!-- Encabezado del Cajón de Capas -->
@@ -136,7 +157,11 @@
             </div>
         </aside>
 
-        <!-- --- ZONA PRINCIPAL DEL MAPA --- -->
+        <!-- ==============================================================
+             MAPA
+             #map lo toma Leaflet. Los botones de tipo de mapa y el
+             indicador de carga van encima, posicionados en absoluto.
+             ============================================================== -->
         <main class="flex-1 relative w-full">
             <div id="loader" class="loading-overlay" style="display:none">
                 <div class="animate-spin rounded-full h-10 w-10 border-4 border-emerald-600 border-t-transparent mb-2"></div>
@@ -172,7 +197,15 @@
         </main>
     </div>
 
-    <!-- --- MODAL DE DATOS DE PARCELA (Ficha individual) --- -->
+    <!-- ==================================================================
+         MODALES
+         Los tres van al final del body y se muestran sobre el mapa.
+         El atributo data-html2canvas-ignore evita que aparezcan en la
+         captura del mapa que se usa para la plancheta.
+         ------------------------------------------------------------------
+         1. Ficha de parcela: se abre al hacer clic o al buscar un padron.
+            Su contenido lo genera showModalData() en app.js.
+         ================================================================== -->
     <div id="parcel-modal" data-html2canvas-ignore="true" class="fixed inset-0 z-[4000] hidden items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
         <div class="modal-dialog modal-dialog-centered w-full max-w-2xl my-auto">
             <div class="modal-content bg-white rounded-none shadow-2xl flex flex-col max-h-[85vh] relative overflow-hidden border border-slate-200">
@@ -211,7 +244,8 @@
         </div>
     </div>
 
-    <!-- --- NUEVO: MODAL DE PROPIEDAD HORIZONTAL (PH) --- -->
+    <!-- 2. Propiedad horizontal: cuando una parcela tiene varias unidades,
+            deja elegir cual consultar antes de abrir la ficha. -->
     <div id="ph-modal" data-html2canvas-ignore="true" class="fixed inset-0 z-[4500] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
         <div class="bg-white rounded-none shadow-2xl flex flex-col w-full max-w-lg border border-slate-200">
             <div class="bg-emerald-800 p-4 text-white flex justify-between items-center border-b border-emerald-900">
@@ -231,7 +265,8 @@
         </div>
     </div>
 
-    <!-- --- MODAL DE RESULTADOS DE FILTROS EN FORMATO TABLA --- -->
+    <!-- 3. Resultados de filtros: lista en tabla lo que devuelven las
+            busquedas por superficie o por estado de edificacion. -->
     <div id="filter-table-modal" data-html2canvas-ignore="true" class="fixed inset-0 z-[4000] hidden items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
         <div class="modal-dialog modal-dialog-centered w-full max-w-3xl my-auto">
             <div class="modal-content bg-white rounded-none shadow-2xl flex flex-col max-h-[85vh] relative overflow-hidden border border-slate-200">
@@ -276,7 +311,7 @@
     </div>
 
 
-    <!-- --- LÓGICA JAVASCRIPT --- -->
-    <script src="app.js?v=9"></script>
+    <!-- Logica del visor: mapa, ficha, plancheta y filtros -->
+    <script src="app.js?v=10"></script>
 </body>
 </html>

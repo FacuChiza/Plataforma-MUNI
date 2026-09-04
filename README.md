@@ -6,18 +6,17 @@ consultada en vivo contra la base municipal.
 
 ---
 
-## ⚠️ Dos cosas que NO están en este repositorio
-
-Si clonás y arrancás sin esto, el visor levanta pero no muestra nada útil.
+## ⚠️ Lo único que NO está en este repositorio
 
 | Falta | Dónde conseguirlo | Sin eso |
 |---|---|---|
-| `web/datos/*.json` (46 MB) | copiar por pendrive o desde el servidor | el mapa aparece vacío |
-| `servidor/.env` | crearlo a partir de `servidor/.env.example` | las fichas salen sin datos |
+| `servidor/.env` | crearlo a partir de `servidor/.env.example` | las fichas salen sin datos de titular |
 
-Ninguno de los dos se versiona a propósito: los GeoJSON son pesados y se
-regeneran cada mes desde el DWG, y el `.env` tiene las credenciales de la base
-municipal.
+No se versiona porque tiene las credenciales de la base municipal.
+
+Los GeoJSON **sí** están (`web/datos/`, 19,4 MB optimizados), así que al clonar
+el mapa funciona enseguida. Lo que no funciona sin `.env` y sin estar en la red
+municipal es la consulta de titulares y superficies.
 
 ---
 
@@ -29,7 +28,6 @@ npm install
 ```
 
 Copiar `.env.example` como `.env` y completar los datos de conexión.
-Copiar los GeoJSON a `web/datos/`.
 
 Probar la conexión **antes** de levantar el servidor:
 
@@ -102,6 +100,18 @@ herramientas/            diagnóstico y verificación
 docs/                    documentación y material de referencia
 ```
 
+### Actualizar los datos del mes
+
+Cuando llega un DWG nuevo y se exportan los GeoJSON, conviene pasarlos por el
+optimizador antes de reemplazarlos: quedan un 58% más livianos sin perder nada.
+
+```bash
+node herramientas/optimizar-datos.js
+node herramientas/comparar-datos.js        # verifica que no cambie ningún resultado
+node herramientas/optimizar-datos.js --reemplazar
+node herramientas/verificar-equivalencia.js --guardar
+```
+
 Frontend y backend están separados a propósito: `web/` se puede publicar por
 su cuenta apuntando a la API que corre en la Municipalidad. El único archivo
 que cambia entre un entorno y otro es `web/js/config.js`.
@@ -130,6 +140,14 @@ script), el encabezado de ese archivo explica el procedimiento con `--hash`.
 
 **Funcionando:** mapa con las parcelas, búsqueda por padrón, ficha catastral con
 todos los titulares, plancheta imprimible, filtros por superficie y edificación.
+
+**Publicado en Vercel:** <https://plataforma-muni.vercel.app> — se despliega solo
+en cada push a `main`. Ahí el mapa funciona, pero las fichas salen sin titular:
+Vercel está en internet y la base municipal es una red privada. Para que
+funcionen hace falta que la API corra en una máquina de la Municipalidad
+publicada con un túnel, y apuntar `web/js/config.js` a esa dirección. **Antes de
+publicar la API hay que ponerle autenticación**: tal como está, cualquiera con
+la URL podría leer los datos de todos los titulares del padrón.
 
 **Pendiente principal:** al hacer clic en una parcela, el sistema todavía
 determina de qué parcela se trata buscando el punto de nomenclatura más cercano,

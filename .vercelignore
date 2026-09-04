@@ -1,0 +1,27 @@
+# ============================================================================
+# Qué NO se sube a Vercel
+# ----------------------------------------------------------------------------
+# En Vercel se publica únicamente el frontend (web/). El backend corre dentro
+# de la red municipal, porque es el único lugar desde donde se puede consultar
+# la base de datos.
+#
+# Excluir servidor/ no es solo por peso: mientras su package.json estuviera
+# visible, Vercel detectaba el proyecto como una aplicación Express e intentaba
+# construir un backend serverless que no existe. Ese es exactamente el error
+# "Build Failed" en 1 segundo.
+# ============================================================================
+
+servidor/
+herramientas/
+docs/
+_revisar/
+
+# Dibujos de AutoCAD y temporales
+*.dwg
+*.dwl
+*.dwl2
+*.bak
+
+# Carpetas de trabajo del optimizador de datos
+web/datos-optimizados/
+web/datos-originales-backup/

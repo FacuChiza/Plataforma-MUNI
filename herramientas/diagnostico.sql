@@ -2,7 +2,7 @@
    DIAGNÓSTICO DE LA BASE MUNICIPAL - Villa de Merlo
    ----------------------------------------------------------------------------
    CÓMO USARLO
-     1. Abrir SQL Server Management Studio conectado a NTVMERLO.
+     1. Abrir SQL Server Management Studio conectado al servidor municipal.
      2. Abrir este archivo (Archivo > Abrir > Archivo, o copiar y pegar).
      3. Verificar arriba a la derecha que la base seleccionada sea PROGRAM.
      4. Ejecutar (F5).

@@ -141,8 +141,7 @@ error visible. Corregirlo es el próximo paso.
 
 ## Base de datos
 
-SQL Server 2016 SP3 en `NTVMERLO` (`10.21.171.5:1433`), base `PROGRAM`, acceso
-de solo lectura sobre cuatro vistas:
+SQL Server, acceso de **solo lectura** sobre cuatro vistas:
 
 - `VI_GIS_CATASTRO_PADRON` — datos de la parcela
 - `VI_CPAR_PROPIETARIOS` — titulares (varios por parcela)
@@ -151,3 +150,8 @@ de solo lectura sobre cuatro vistas:
 
 Es un sistema contratado a un proveedor: las tablas no se modifican, solo se
 consultan.
+
+Los datos de conexión (nombre del servidor, IP, versión, credenciales) no se
+documentan acá: este repositorio es público y esa información solo sirve para
+que alguien de afuera arme un mapa de la red municipal. Están en el `.env` del
+servidor, que no se versiona.

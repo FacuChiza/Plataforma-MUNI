@@ -514,6 +514,11 @@
          * encima. En un documento que se archiva o se entrega al vecino eso es
          * ruido. Acá se ocultan esos elementos, se saca la foto y se restauran.
          */
+        // Proporción (ancho / alto) del marco donde entra el mapa en la
+        // plancheta. Sale de las medidas reales de la hoja A4 apaisada: el
+        // marco mide unos 146 mm de ancho por 135 de alto.
+        const PROPORCION_MARCO_MAPA = 146 / 135;
+
         async function capturarMapaLimpio() {
             const contenedor = document.getElementById('map');
             const aOcultar = contenedor.querySelectorAll(
@@ -526,10 +531,41 @@
                 el.style.visibility = 'hidden';
             });
 
+            // --------------------------------------------------------------
+            // El mapa en pantalla es apaisado (más o menos 2,5 de ancho por 1
+            // de alto) y el marco de la plancheta es casi cuadrado. Si se
+            // captura tal cual y después se encaja en el marco, hay que
+            // recortarle los costados: el terreno aparece cortado.
+            //
+            // Por eso, antes de la foto, se le da al mapa la MISMA proporción
+            // que el marco de destino y se vuelve a encuadrar. Así la imagen
+            // entra entera, sin recortar nada, y la parcela queda centrada.
+            //
+            // El cambio dura lo que tarda la captura y se deshace enseguida;
+            // mientras tanto el usuario ve el indicador de carga.
+            // --------------------------------------------------------------
+            const anchoPrevio = contenedor.style.width;
+            const altoPrevio = contenedor.style.height;
+            const alto = contenedor.offsetHeight;
+            const anchoObjetivo = Math.round(alto * PROPORCION_MARCO_MAPA);
+
             try {
+                contenedor.style.width = anchoObjetivo + 'px';
+                map.invalidateSize({ animate: false });
+
+                // Con el nuevo tamaño hay que reencuadrar: si no, la parcela
+                // queda descentrada o directamente fuera de la vista.
+                if (selectedLayer && selectedLayer.feature) {
+                    encuadrarParcela(selectedLayer, selectedLayer.feature, { animate: false });
+                }
+                await new Promise(r => setTimeout(r, 900)); // que carguen los tiles
+
                 const canvas = await html2canvas(contenedor, { useCORS: true, scale: 2, logging: false });
                 return canvas.toDataURL('image/jpeg', 0.85);
             } finally {
+                contenedor.style.width = anchoPrevio;
+                contenedor.style.height = altoPrevio;
+                map.invalidateSize({ animate: false });
                 previos.forEach(([el, valor]) => { el.style.visibility = valor; });
             }
         }
@@ -544,18 +580,9 @@
                 // que no aparezca su sombra en la captura.
                 await new Promise(r => setTimeout(r, 250));
 
-                // Re-encuadre antes de la foto: la plancheta SIEMPRE tiene que
-                // mostrar la parcela dentro de su manzana. Si el operador movió
-                // o alejó el mapa mientras miraba la ficha, sin esto se
-                // imprimiría la vista que quedó en pantalla y el croquis no
-                // serviría. Sin animación, para no fotografiar el mapa a mitad
-                // del desplazamiento.
-                if (selectedLayer && selectedLayer.feature) {
-                    encuadrarParcela(selectedLayer, selectedLayer.feature, { animate: false });
-                    // Margen para que se descarguen los tiles del nuevo encuadre.
-                    await new Promise(r => setTimeout(r, 900));
-                }
-
+                // capturarMapaLimpio() se encarga de reencuadrar la parcela
+                // dentro de su manzana antes de la foto, con el mapa ya puesto
+                // en la proporción del marco de la plancheta.
                 const imgData = await capturarMapaLimpio();
 
                 const p = currentFeatureProps;
@@ -629,6 +656,33 @@
                     ? `Titulares (${titulares.length})`
                     : 'Datos del titular';
 
+                // ------------------------------------------------------------
+                // La plancheta tiene que entrar en UNA hoja.
+                //
+                // El alto disponible para esta tabla es fijo, así que en vez de
+                // dejar que crezca y desborde, la densidad se ajusta a la
+                // cantidad: con pocos titulares las filas van cómodas, con
+                // muchos se compactan. Pasado cierto punto ya no se puede
+                // achicar más sin volverlo ilegible, y ahí se listan los que
+                // entran y se deja constancia de cuántos faltan (nunca se
+                // ocultan en silencio: el aviso es parte del documento).
+                // ------------------------------------------------------------
+                // Los topes salen de medir el alto real del documento contra el
+                // alto útil de una A4 apaisada (192 mm ≈ 726 px), no de una
+                // estimación: con 12 titulares y filas compactas el contenido
+                // se pasaba 158 px y saltaba a una segunda hoja.
+                // Medido: con la columna de datos por encima de ~568 px la hoja
+                // se parte en dos. Cada fila de titular ocupa unos 20 px, así
+                // que ocho es el máximo que entra dejando lugar al resto de las
+                // secciones.
+                let densidad, tope;
+                if (titulares.length <= 4)      { densidad = 'comoda';       tope = 4; }
+                else if (titulares.length <= 6) { densidad = 'compacta';     tope = 6; }
+                else                            { densidad = 'muy-compacta'; tope = 7; }
+
+                const visibles = titulares.slice(0, tope);
+                const ocultos = titulares.length - visibles.length;
+
                 let tablaTitulares;
                 if (titulares.length === 0) {
                     tablaTitulares = `
@@ -641,7 +695,7 @@
                             </tr>
                         </table>`;
                 } else {
-                    const filas = titulares.map((t, i) => {
+                    const filas = visibles.map((t, i) => {
                         const nombre = [t.APELLIDO, t.NOMBRE]
                             .map(x => esc(x || '').trim()).filter(Boolean).join(' ');
                         const doc = [t.TIPO_DOCUMENTO, t.DOCUMENTO]
@@ -650,28 +704,45 @@
                         const lugar = [t.BARRIO, t.LOCALIDAD, t.PROVINCIA, t.CODIGO_POS]
                             .map(x => esc(x || '').trim()).filter(Boolean).join(', ');
 
+                        // Con las filas compactas el domicilio va en una sola
+                        // línea: dos líneas por titular multiplican el alto.
+                        // Con densidad cómoda entra el domicilio completo en dos
+                        // líneas. Compactado, se recorta a calle + número +
+                        // barrio y se fuerza UNA sola línea: dos líneas por
+                        // titular duplican el alto de la tabla y es lo que
+                        // empujaba la plancheta a una segunda hoja.
+                        const barrio = esc(t.BARRIO || '').trim();
+                        const domCompleto = densidad === 'comoda'
+                            ? `<span class="vl">${dom}</span>${lugar ? `<span class="sub">${lugar}</span>` : ''}`
+                            : `<span class="vl una-linea">${dom}${barrio ? ' · ' + barrio : ''}</span>`;
+
                         return `
                             <tr>
                                 <td class="col-orden">${titulares.length > 1 ? (i + 1) : ''}</td>
-                                <td>
-                                    <span class="vl editable" contenteditable="true">${nombre || ''}</span>
+                                <td class="col-nombre">
+                                    <span class="vl editable${densidad === 'comoda' ? '' : ' una-linea'}" contenteditable="true">${nombre || ''}</span>
                                     ${doc ? `<span class="sub">${doc}</span>` : ''}
                                 </td>
-                                <td>
-                                    <span class="vl">${dom}</span>
-                                    ${lugar ? `<span class="sub">${lugar}</span>` : ''}
-                                </td>
+                                <td class="col-domicilio">${domCompleto}</td>
                             </tr>`;
                     }).join('');
 
+                    const aviso = ocultos > 0
+                        ? `<tr class="resto">
+                               <td class="col-orden"></td>
+                               <td colspan="2">y ${ocultos} titular${ocultos > 1 ? 'es' : ''} más, no listado${ocultos > 1 ? 's' : ''} por espacio — consultar la ficha completa en el visor</td>
+                           </tr>`
+                        : '';
+
                     tablaTitulares = `
-                        <table class="datos tabla-titulares">
+                        <table class="datos tabla-titulares ${densidad}">
                             <tr class="cab">
                                 <td class="col-orden">${titulares.length > 1 ? '#' : ''}</td>
-                                <td width="46%"><span class="et">Apellido y nombre / Razón social</span></td>
-                                <td width="46%"><span class="et">Domicilio postal</span></td>
+                                <td class="col-nombre"><span class="et">Apellido y nombre / Razón social</span></td>
+                                <td class="col-domicilio"><span class="et">Domicilio postal</span></td>
                             </tr>
                             ${filas}
+                            ${aviso}
                         </table>`;
                 }
 
@@ -726,8 +797,8 @@
         align-items: stretch;
         gap: 14px;
         border-bottom: 2.5px solid var(--institucional);
-        padding-bottom: 9px;
-        margin-bottom: 11px;
+        padding-bottom: 7px;
+        margin-bottom: 8px;
     }
     .escudo {
         width: 54px; height: 54px;
@@ -752,7 +823,7 @@
 
     /* Identificación destacada: lo primero que se busca en la hoja */
     .identificacion {
-        display: flex; gap: 0; margin-bottom: 11px;
+        display: flex; gap: 0; margin-bottom: 8px;
         border: 1.5px solid var(--institucional);
     }
     .ident-celda {
@@ -774,19 +845,22 @@
     .ident-celda.principal .vl { font-size: 16px; letter-spacing: .01em; }
 
     /* ---------- Cuerpo en dos columnas ---------- */
-    .cuerpo { display: flex; gap: 13px; align-items: flex-start; }
+    .cuerpo { display: flex; gap: 11px; align-items: flex-start; }
     .col-datos { width: 46%; flex-shrink: 0; }
     .col-mapa  { width: 54%; display: flex; flex-direction: column; }
 
     .seccion-titulo {
         font-size: 8px; font-weight: 700; text-transform: uppercase;
         letter-spacing: .13em; color: var(--institucional);
-        margin: 9px 0 3px; padding-bottom: 2px;
+        margin: 5px 0 2px; padding-bottom: 2px;
         border-bottom: 1px solid var(--institucional);
     }
     .seccion-titulo:first-child { margin-top: 0; }
 
-    table.datos { width: 100%; border-collapse: collapse; border: 1px solid var(--linea); }
+    /* table-layout: fixed mantiene las columnas alineadas entre filas y entre
+       tablas. Sin esto cada tabla reparte el ancho según su contenido y las
+       secciones quedan desalineadas entre sí. */
+    table.datos { width: 100%; border-collapse: collapse; border: 1px solid var(--linea); table-layout: fixed; }
     table.datos td {
         border: 1px solid var(--linea-fina);
         padding: 4px 6px;
@@ -802,6 +876,8 @@
         display: block; min-height: 13px; word-break: break-word;
     }
     .vl.numero { font-variant-numeric: tabular-nums; }
+    /* Una línea con puntos suspensivos: mantiene el alto de la fila previsible */
+    .vl.recorte { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vacio { color: #c5cad3; font-weight: 400; }
 
     /* Campos que el operador completa a mano sobre el documento */
@@ -832,31 +908,73 @@
         print-color-adjust: exact;
     }
 
-    /* ---------- Tabla de titulares ---------- */
-    /* Puede tener una fila o treinta, así que se compacta al máximo sin dejar
-       de ser legible impresa. Si desborda, pasa a una segunda hoja. */
-    .tabla-titulares td { padding: 3px 6px; }
-    .tabla-titulares tr.cab td { background: var(--realce); padding: 3px 6px; }
+    /* ---------- Tabla de titulares ----------
+       Una parcela puede tener uno o treinta titulares, y la plancheta tiene
+       que entrar SIEMPRE en una hoja. La densidad de las filas se ajusta a la
+       cantidad (clases .comoda / .compacta / .muy-compacta que pone el JS).
+
+       table-layout: fixed es lo que mantiene las columnas alineadas: sin eso
+       el navegador reparte el ancho según el contenido y cada fila queda con
+       las columnas corridas respecto de la anterior. */
+    .tabla-titulares { table-layout: fixed; }
+    .tabla-titulares td { padding: 3px 6px; vertical-align: top; }
+    .tabla-titulares tr.cab td { background: var(--realce); padding: 2px 6px; }
+
     .tabla-titulares .col-orden {
-        width: 20px; text-align: center;
-        font-size: 9px; font-weight: 700; color: var(--tenue);
+        width: 18px; text-align: center;
+        font-size: 8.5px; font-weight: 700; color: var(--tenue);
         font-variant-numeric: tabular-nums;
     }
-    .tabla-titulares .vl { font-size: 10px; min-height: 12px; }
+    .tabla-titulares .col-nombre    { width: 47%; }
+    .tabla-titulares .col-domicilio { width: 47%; }
+
+    .tabla-titulares .vl {
+        font-size: 10px; min-height: 0;
+        overflow-wrap: break-word;
+    }
     .tabla-titulares .sub {
         display: block;
         font-size: 8px; color: var(--tenue);
         font-variant-numeric: tabular-nums;
-        margin-top: 1px;
+        margin-top: 0;
+        overflow-wrap: break-word;
     }
-    /* Evita que una fila de titular quede partida entre dos hojas */
+
+    /* Densidades: mismo diseño, distinto aire según cuántos titulares haya */
+    .tabla-titulares.comoda td       { padding: 4px 6px; }
+    .tabla-titulares.comoda .vl      { font-size: 10.5px; line-height: 1.3; }
+
+    .tabla-titulares.compacta td     { padding: 2px 6px; }
+    .tabla-titulares.compacta .vl    { font-size: 9.5px; line-height: 1.2; }
+    .tabla-titulares.compacta .sub   { font-size: 7.5px; line-height: 1.15; }
+
+    .tabla-titulares.muy-compacta td   { padding: 1px 5px; }
+    .tabla-titulares.muy-compacta .vl  { font-size: 8.5px; line-height: 1.15; }
+    .tabla-titulares.muy-compacta .sub { font-size: 7px; line-height: 1.1; }
+
+    /* Una sola línea, recortando con puntos suspensivos si no entra.
+       Garantiza que cada titular ocupe un alto fijo y previsible. */
+    .tabla-titulares .una-linea {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Aviso de los que no entraron: nunca se ocultan sin decirlo */
+    .tabla-titulares tr.resto td {
+        font-size: 7.5px; font-style: italic; color: var(--tenue);
+        background: var(--realce); padding: 3px 6px;
+    }
+
+    /* Una fila no se parte entre dos hojas */
     .tabla-titulares tr { page-break-inside: avoid; break-inside: avoid; }
 
     .caja-observaciones {
         border: 1px solid var(--linea);
-        min-height: 74px; padding: 6px;
+        min-height: 52px; padding: 5px;
     }
-    .caja-observaciones div { outline: none; min-height: 62px; font-size: 10px; }
+    .caja-observaciones div { outline: none; min-height: 42px; font-size: 9.5px; }
 
     /* ---------- Mapa ---------- */
     .mapa-cabecera {
@@ -871,9 +989,13 @@
     .marco-mapa {
         border: 1.5px solid var(--linea);
         padding: 3px; background: #fff;
-        flex-grow: 1; min-height: 385px;
+        flex-grow: 1; min-height: 330px;
     }
-    .marco-mapa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* 'contain' y no 'cover': la imagen ya viene con la proporción del marco
+       (ver PROPORCION_MARCO_MAPA), así que llena el espacio sin que se recorte
+       nada. Si alguna vez la proporción no coincidiera, es preferible una
+       banda de aire antes que un terreno cortado. */
+    .marco-mapa img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
     .referencias {
         display: flex; gap: 13px; margin-top: 5px;
@@ -885,7 +1007,7 @@
 
     /* ---------- Pie ---------- */
     .pie {
-        margin-top: 9px; padding-top: 5px;
+        margin-top: 6px; padding-top: 4px;
         border-top: 1px solid var(--linea-fina);
         display: flex; justify-content: space-between;
         font-size: 7.5px; color: var(--tenue);
@@ -999,7 +1121,7 @@ ${p._DEMO ? `
             </tr>
             <tr>
                 <td colspan="2"><span class="et">N.º de contribuyente</span><span class="vl numero">${dato(p.CUENTA)}</span></td>
-                <td colspan="2"><span class="et">Designación oficial</span><span class="vl">${dato(p.DESIG_OFI)}</span></td>
+                <td colspan="2"><span class="et">Designación oficial</span><span class="vl recorte">${dato(p.DESIG_OFI)}</span></td>
             </tr>
             <tr>
                 <td colspan="2">

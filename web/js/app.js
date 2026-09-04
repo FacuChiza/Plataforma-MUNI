@@ -1397,126 +1397,210 @@ ${p._DEMO ? `
             modal.classList.add('flex');
         }
 
-        function paintMapFromFilter(data, config, tipoFiltro) {
-            const setPadrones = new Set();
-            data.forEach(p => {
-                if (p.PADRON) setPadrones.add(String(p.PADRON).trim().toUpperCase());
-            });
+        /**
+         * Pinta en el mapa las parcelas que devolvió un filtro.
+         *
+         * OJO con el recorrido: geojsonLayer es un featureGroup que contiene la
+         * capa GeoJSON, y es esa capa la que contiene las 17.614 parcelas. Un
+         * eachLayer directo devuelve el grupo intermedio, que no tiene
+         * .feature, y rompe con "cannot read properties of undefined". Hay que
+         * bajar en profundidad, igual que hace el buscador.
+         */
+        function paintMapFromFilter(data, config) {
+            const padrones = new Set();
+            for (const fila of data) {
+                if (fila.PADRON) padrones.add(String(fila.PADRON).trim().toUpperCase());
+            }
 
-            let totalPintadas = 0;
+            const resaltado = {
+                color: config.color || '#7c3aed',
+                fillColor: config.fillColor || '#7c3aed',
+                weight: config.weight || 2,
+                fillOpacity: config.fillOpacity || 0.5
+            };
 
-            geojsonLayer.eachLayer(layer => {
-                const props = layer.feature.properties;
-                // En este flujo todavía se pinta validando contra el geoJSON (polígono), 
-                // por lo que usamos NRO_RENTA o PADRON del geoJSON
-                const nroRentaGeoJSON = String(props.NRO_RENTA || props.PADRON || '').trim().toUpperCase();
+            let pintadas = 0;
+            geojsonLayer.eachLayer(function recorrer(capa) {
+                if (capa.eachLayer) { capa.eachLayer(recorrer); return; }
+                if (!capa.feature || !capa.setStyle) return;
 
-                if (nroRentaGeoJSON && setPadrones.has(nroRentaGeoJSON)) {
-                    layer.setStyle({ fillColor: config.fillColor, fillOpacity: 0.65, color: config.borderColor, weight: 2 });
-                    totalPintadas++;
+                const props = capa.feature.properties || {};
+                const renta = String(props.NRO_RENTA || props.PADRON || '').trim().toUpperCase();
+
+                if (renta && padrones.has(renta)) {
+                    capa.setStyle(resaltado);
+                    pintadas++;
                 } else {
-                    layer.setStyle({ color: '#13f8bc', weight: 0.8, fillOpacity: 0.05, fillColor: '#10abb9' });
+                    capa.setStyle(ESTILO_BASE);
                 }
             });
 
-            if (tipoFiltro === 'superficie') {
-                const c = document.getElementById('filter-results-counter');
-                c.innerHTML = `Filtro Activo: <strong class="text-emerald-700 font-extrabold">${totalPintadas}</strong> parcelas.`;
-                c.classList.remove('hidden');
-                document.getElementById('filter-edif-results-counter').classList.add('hidden'); 
-            } else if (tipoFiltro === 'edificacion') {
-                const c = document.getElementById('filter-edif-results-counter');
-                c.innerHTML = `Filtro Activo: <strong class="text-emerald-700 font-extrabold">${totalPintadas}</strong> parcelas.`;
-                c.classList.remove('hidden');
-                document.getElementById('filter-results-counter').classList.add('hidden'); 
-            }
-
-            document.getElementById('loader').style.display = 'none';
+            return pintadas;
         }
 
-        async function aplicarFiltroSuperficie() {
-            const minInput = document.getElementById('filter-sup-min').value.trim();
-            const maxInput = document.getElementById('filter-sup-max').value.trim();
-            
-            if (!minInput && !maxInput) {
-                alert("Por favor, ingrese al menos un valor de superficie mínima o máxima.");
+        // ====================================================================
+        // BÚSQUEDA POR FILTROS COMBINADOS
+        // --------------------------------------------------------------------
+        // Antes había una función por criterio y cada una hacía su consulta por
+        // separado, así que no se podían cruzar. Ahora se leen todos los campos
+        // del panel, se mandan juntos, y el servidor los combina con Y.
+        // ====================================================================
+
+        /** Lee el panel y arma los criterios. Los campos vacíos no filtran. */
+        function leerFiltros() {
+            const num = (id) => {
+                const v = document.getElementById(id).value.trim();
+                return v === '' ? null : Number(v);
+            };
+            const texto = (id) => document.getElementById(id).value.trim();
+            const radio = document.querySelector('input[name="filtro-edificacion"]:checked');
+
+            return {
+                supMin: num('filtro-sup-min'),
+                supMax: num('filtro-sup-max'),
+                frenteMin: num('filtro-frente-min'),
+                frenteMax: num('filtro-frente-max'),
+                edificacion: radio ? radio.value : '',
+                zonificacion: texto('filtro-zonificacion'),
+                barrio: texto('filtro-barrio')
+            };
+        }
+
+        /** Describe los filtros activos en palabras, para el título de la tabla. */
+        function describirFiltros(f) {
+            const partes = [];
+            if (f.supMin !== null && f.supMax !== null) partes.push(`${f.supMin} a ${f.supMax} m²`);
+            else if (f.supMin !== null) partes.push(`desde ${f.supMin} m²`);
+            else if (f.supMax !== null) partes.push(`hasta ${f.supMax} m²`);
+
+            if (f.frenteMin !== null && f.frenteMax !== null) partes.push(`frente ${f.frenteMin} a ${f.frenteMax} m`);
+            else if (f.frenteMin !== null) partes.push(`frente desde ${f.frenteMin} m`);
+            else if (f.frenteMax !== null) partes.push(`frente hasta ${f.frenteMax} m`);
+
+            if (f.edificacion) partes.push(f.edificacion.toLowerCase());
+            if (f.zonificacion) partes.push(f.zonificacion);
+            if (f.barrio) partes.push(f.barrio);
+
+            return partes;
+        }
+
+        async function aplicarFiltros() {
+            const filtros = leerFiltros();
+            const activos = describirFiltros(filtros);
+
+            // Sin ningún criterio, la consulta devolvería el padrón entero.
+            if (activos.length === 0) {
+                const resumen = document.getElementById('filtro-resumen');
+                resumen.textContent = 'Indicá al menos un criterio de búsqueda';
+                resumen.classList.remove('hidden');
                 return;
+            }
+
+            // Validación de rangos: si están invertidos, se corrigen en vez de
+            // devolver una lista vacía que parece un "no hay resultados".
+            if (filtros.supMin !== null && filtros.supMax !== null && filtros.supMin > filtros.supMax) {
+                [filtros.supMin, filtros.supMax] = [filtros.supMax, filtros.supMin];
+                document.getElementById('filtro-sup-min').value = filtros.supMin;
+                document.getElementById('filtro-sup-max').value = filtros.supMax;
+            }
+            if (filtros.frenteMin !== null && filtros.frenteMax !== null && filtros.frenteMin > filtros.frenteMax) {
+                [filtros.frenteMin, filtros.frenteMax] = [filtros.frenteMax, filtros.frenteMin];
+                document.getElementById('filtro-frente-min').value = filtros.frenteMin;
+                document.getElementById('filtro-frente-max').value = filtros.frenteMax;
             }
 
             document.getElementById('loader').style.display = 'flex';
 
             try {
                 const params = new URLSearchParams();
-                if (minInput) params.append('min', minInput);
-                if (maxInput) params.append('max', maxInput);
-
-                const response = await fetch(CONFIG.url(`api/superficie?${params.toString()}`));
-                if (!response.ok) throw new Error("Error en el servidor municipal.");
-
-                const data = await response.json();
-                
-                abrirModalResultados(`Parcelas con Área entre ${minInput||0} y ${maxInput||'∞'} m²`, data, "SUP_TER", {
-                    fillColor: '#f59e0b', borderColor: '#d97706'
-                }, 'superficie');
-
-            } catch (err) {
-                console.error("Error aplicando filtro:", err);
-                alert("Ocurrió un error al intentar filtrar las superficies en el servidor.");
-            } finally { document.getElementById('loader').style.display = 'none'; }
-        }
-
-        async function aplicarFiltroEdificacion() {
-            const opciones = document.getElementsByName('filtro-edificacion');
-            let tipoSeleccionado = null;
-            
-            for (let radio of opciones) {
-                if (radio.checked) {
-                    tipoSeleccionado = radio.value;
-                    break;
+                for (const [clave, valor] of Object.entries(filtros)) {
+                    if (valor !== null && valor !== '') params.set(clave, valor);
                 }
+
+                const respuesta = await fetch(CONFIG.url(`api/filtrar?${params.toString()}`));
+                if (!respuesta.ok) {
+                    const detalle = await respuesta.json().catch(() => ({}));
+                    throw new Error(detalle.error || 'No se pudo consultar la base municipal.');
+                }
+
+                const datos = await respuesta.json();
+
+                const resumen = document.getElementById('filtro-resumen');
+                resumen.textContent = datos.length === 0
+                    ? 'Sin resultados para esos criterios'
+                    : `${datos.length} parcela${datos.length > 1 ? 's' : ''} encontrada${datos.length > 1 ? 's' : ''}`;
+                resumen.classList.remove('hidden');
+
+                document.getElementById('filtros-activos').textContent = activos.length;
+                document.getElementById('filtros-activos').classList.remove('hidden');
+
+                if (datos.length > 0) {
+                    const config = { color: '#7c3aed', fillColor: '#7c3aed', weight: 2, fillOpacity: 0.45 };
+                    paintMapFromFilter(datos, config, 'combinado');
+                    abrirModalResultados(`Búsqueda: ${activos.join(' · ')}`, datos, 'SUP_TER', config, 'combinado');
+                }
+
+            } catch (error) {
+                console.error('❌ Error en la búsqueda por filtros:', error);
+                const resumen = document.getElementById('filtro-resumen');
+                resumen.textContent = error.message || 'Error al consultar';
+                resumen.classList.remove('hidden');
+            } finally {
+                document.getElementById('loader').style.display = 'none';
             }
+        }
 
-            if (!tipoSeleccionado) {
-                alert("Por favor, seleccione si desea filtrar por Edificado o Baldío.");
-                return;
-            }
+        function limpiarFiltros() {
+            ['filtro-sup-min', 'filtro-sup-max', 'filtro-frente-min', 'filtro-frente-max']
+                .forEach((id) => { document.getElementById(id).value = ''; });
+            document.getElementById('filtro-zonificacion').value = '';
+            document.getElementById('filtro-barrio').value = '';
+            const todas = document.querySelector('input[name="filtro-edificacion"][value=""]');
+            if (todas) todas.checked = true;
 
-            document.getElementById('loader').style.display = 'flex';
+            document.getElementById('filtro-resumen').classList.add('hidden');
+            document.getElementById('filtros-activos').classList.add('hidden');
 
+            // Devuelve todas las parcelas a su estilo normal
+            limpiarResaltadoManzana();
+            geojsonLayer.eachLayer(function restaurar(capa) {
+                if (capa.eachLayer) { capa.eachLayer(restaurar); return; }
+                if (capa.setStyle) capa.setStyle(ESTILO_BASE);
+            });
+            selectedLayer = null;
+        }
+
+        /**
+         * Llena las listas de zonificación y barrio con los valores que
+         * existen realmente en la base, para no tener que adivinar cómo se
+         * escriben. Si la base no está disponible, las listas quedan con la
+         * opción "Todas" y los demás filtros siguen funcionando.
+         */
+        async function cargarOpcionesFiltro() {
             try {
-                const response = await fetch(CONFIG.url(`api/edificacion?tipo=${tipoSeleccionado}`));
-                if (!response.ok) throw new Error("Error en el servidor municipal.");
+                const respuesta = await fetch(CONFIG.url('api/opciones'));
+                if (!respuesta.ok) return;
 
-                const data = await response.json();
-                
-                const fillColor = tipoSeleccionado === 'EDIFICADO' ? '#3b82f6' : '#84cc16';
-                const borderColor = tipoSeleccionado === 'EDIFICADO' ? '#1d4ed8' : '#4d7c0f';
+                const opciones = await respuesta.json();
+                const llenar = (id, valores) => {
+                    const select = document.getElementById(id);
+                    if (!select || !Array.isArray(valores)) return;
+                    for (const valor of valores) {
+                        const opcion = document.createElement('option');
+                        opcion.value = valor;
+                        opcion.textContent = valor;
+                        select.appendChild(opcion);
+                    }
+                };
 
-                abrirModalResultados(`Estado Constructivo: ${tipoSeleccionado}`, data, "BAL_EDIF", {
-                    fillColor: fillColor, borderColor: borderColor
-                }, 'edificacion');
-
-            } catch (err) {
-                console.error("Error aplicando filtro:", err);
-                alert("Ocurrió un error al intentar consultar el estado de edificación en el servidor.");
-            } finally { document.getElementById('loader').style.display = 'none'; }
+                llenar('filtro-zonificacion', opciones.zonificaciones);
+                llenar('filtro-barrio', opciones.barrios);
+                console.log(`🔧 Opciones de filtro cargadas: ${(opciones.zonificaciones || []).length} zonificaciones, ${(opciones.barrios || []).length} barrios.`);
+            } catch (error) {
+                console.warn('⚠️ No se pudieron cargar las opciones de filtro:', error);
+            }
         }
 
-        function limpiarFiltroSuperficie() {
-            document.getElementById('filter-sup-min').value = "";
-            document.getElementById('filter-sup-max').value = "";
-            document.getElementById('filter-results-counter').classList.add('hidden');
-            geojsonLayer.eachLayer(layer => { layer.setStyle({ color: '#13f8bc', weight: 0.8, fillOpacity: 0.05, fillColor: '#10abb9' }); });
-            if (selectedLayer) selectedLayer = null;
-        }
-
-        function limpiarFiltroEdificacion() {
-            const opciones = document.getElementsByName('filtro-edificacion');
-            opciones.forEach(radio => radio.checked = false);
-            document.getElementById('filter-edif-results-counter').classList.add('hidden');
-            geojsonLayer.eachLayer(layer => { layer.setStyle({ color: '#13f8bc', weight: 0.8, fillOpacity: 0.05, fillColor: '#10abb9' }); });
-            if (selectedLayer) selectedLayer = null;
-        }
 
         async function loadData() {
             try {
@@ -1838,4 +1922,9 @@ ${p._DEMO ? `
             moveTimer = setTimeout(renderDynamicLabels, 150);
         });
 
-        window.onload = loadData;
+        window.onload = () => {
+            loadData();
+            // Las listas de zonificación y barrio se llenan aparte: si la base
+            // no responde, el mapa igual carga y los demás filtros funcionan.
+            cargarOpcionesFiltro();
+        };

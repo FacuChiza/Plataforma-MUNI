@@ -72,6 +72,90 @@ const MAX_ROWS = parseInt(process.env.MAX_ROWS, 10) || 5000;
 // ============================================================================
 const MODO_DEMO = process.env.MODO_DEMO === 'true';
 
+/**
+ * Padrones reales tomados del GeoJSON, para el modo de prueba.
+ *
+ * Los filtros no sirven de nada si devuelven padrones inventados: el mapa no
+ * los encontraría y no se pintaría ninguna parcela. Así que en modo de prueba
+ * se leen los padrones que EXISTEN en el archivo de parcelas y se les inventan
+ * los atributos (superficie, frente, zonificación). El resultado se puede
+ * pintar en el mapa igual que uno real, que es lo que hace útil la prueba.
+ *
+ * Se lee una sola vez y solo si hace falta.
+ */
+let padronesDePrueba = null;
+
+function cargarPadronesDePrueba() {
+    if (padronesDePrueba !== null) return padronesDePrueba;
+
+    try {
+        const fs = require('fs');
+        const ruta = path.join(__dirname, '..', 'web', 'datos', 'Merlo2026Parcelas-V1.json');
+        const datos = JSON.parse(fs.readFileSync(ruta, 'utf8'));
+
+        padronesDePrueba = datos.features
+            .map((f) => ({
+                PADRON: String((f.properties || {}).NRO_RENTA || '').trim(),
+                NOMENCLA: String((f.properties || {}).NOMENCLA || '').trim()
+            }))
+            .filter((p) => p.PADRON);
+
+        console.log(`🧪 Modo de prueba: ${padronesDePrueba.length} padrones cargados del GeoJSON.`);
+    } catch (err) {
+        console.warn('⚠️  Modo de prueba: no se pudo leer el archivo de parcelas:', err.message);
+        padronesDePrueba = [];
+    }
+    return padronesDePrueba;
+}
+
+/**
+ * Atributos ficticios pero DETERMINÍSTICOS: el mismo padrón devuelve siempre
+ * los mismos valores. Si fueran aleatorios, cada consulta daría un resultado
+ * distinto y no se podría probar nada.
+ */
+function atributosDePrueba(padron) {
+    const n = parseInt(String(padron).replace(/\D/g, '').slice(-6), 10) || 0;
+    const zonas = ['RESIDENCIAL R1', 'RESIDENCIAL R2', 'COMERCIAL C1', 'INDUSTRIAL', 'RURAL'];
+    const barrios = ['CENTRO DEMO', 'BARRIO DEMO', 'BALNEARIO DEMO', 'RINCON DEMO'];
+
+    return {
+        SUP_TER: 200 + (n % 1800),          // entre 200 y 2000 m²
+        MET_FRENTE: 8 + (n % 22),           // entre 8 y 30 m
+        BAL_EDIF: (n % 3 === 0) ? 'BALDIO' : 'EDIFICADO',
+        ZONIFICACION: zonas[n % zonas.length],
+        BARRIO: barrios[n % barrios.length]
+    };
+}
+
+/** Aplica los criterios sobre los datos de prueba, igual que lo haría el SQL. */
+function filtrarDePrueba(criterios) {
+    const contiene = (valor, buscado) =>
+        !buscado || String(valor || '').toUpperCase().includes(String(buscado).toUpperCase());
+
+    const vistos = new Set();
+
+    return cargarPadronesDePrueba()
+        .filter((p) => {
+            // Equivale al SELECT DISTINCT de la consulta real: el archivo de
+            // parcelas tiene padrones repetidos y sin esto saldrían duplicados.
+            if (vistos.has(p.PADRON)) return false;
+            vistos.add(p.PADRON);
+            return true;
+        })
+        .map((p) => ({ ...p, ...atributosDePrueba(p.PADRON) }))
+        .filter((p) => {
+            if (!isNaN(criterios.supMin) && p.SUP_TER < criterios.supMin) return false;
+            if (!isNaN(criterios.supMax) && p.SUP_TER > criterios.supMax) return false;
+            if (!isNaN(criterios.frenteMin) && p.MET_FRENTE < criterios.frenteMin) return false;
+            if (!isNaN(criterios.frenteMax) && p.MET_FRENTE > criterios.frenteMax) return false;
+            if (!contiene(p.BAL_EDIF, criterios.edificacion)) return false;
+            if (!contiene(p.ZONIFICACION, criterios.zonificacion)) return false;
+            if (!contiene(p.BARRIO, criterios.barrio)) return false;
+            return true;
+        })
+        .slice(0, MAX_ROWS);
+}
+
 function fichaDePrueba(padron, nomenclatura) {
     // Un titular, dos titulares y muchos: los tres casos que hay que poder
     // revisar. Según el último dígito del padrón se devuelve uno u otro.
@@ -485,6 +569,156 @@ app.get('/api/catastro', async (req, res) => {
     } catch (err) {
         console.error('Error en consulta SQL Server:', err);
         res.status(500).json({ error: 'Error interno de comunicación con la base de datos municipal.' });
+    }
+});
+
+// ============================================================================
+// ENDPOINT: BÚSQUEDA COMBINADA DE PARCELAS
+// ----------------------------------------------------------------------------
+// Antes había un endpoint por criterio: /api/superficie y /api/edificacion.
+// Servían para una sola condición por vez, así que no se podía pedir algo tan
+// común como "baldíos de más de 500 m² en el barrio Centro": había que filtrar
+// por uno, exportar, y cruzar a mano.
+//
+// Este endpoint acepta todos los criterios juntos y los combina con AND. Los
+// que no llegan, no filtran, así que sirve igual para una condición o para
+// cinco.
+//
+// Los dos endpoints anteriores siguen funcionando: hay pantallas que todavía
+// los usan y no se rompen por esto.
+// ============================================================================
+app.get('/api/filtrar', async (req, res) => {
+    const activePool = getPool();
+
+    // Criterios recibidos. Todos opcionales.
+    const criterios = {
+        supMin: parseFloat(req.query.supMin),
+        supMax: parseFloat(req.query.supMax),
+        frenteMin: parseFloat(req.query.frenteMin),
+        frenteMax: parseFloat(req.query.frenteMax),
+        edificacion: String(req.query.edificacion || '').trim().slice(0, 60),
+        zonificacion: String(req.query.zonificacion || '').trim().slice(0, 80),
+        barrio: String(req.query.barrio || '').trim().slice(0, 80)
+    };
+
+    if (!activePool) {
+        if (MODO_DEMO) return res.json(filtrarDePrueba(criterios));
+        return res.status(503).json({ error: 'Base de datos municipal no disponible en este momento.' });
+    }
+
+    try {
+        const request = activePool.request();
+        const condiciones = ['p.ACTIVO = 1'];
+
+        // Cada criterio agrega su condición Y su parámetro. Los valores nunca
+        // se concatenan al SQL: van siempre como parámetros, así que no hay
+        // forma de inyectar nada desde la query string.
+        if (!isNaN(criterios.supMin)) {
+            request.input('supMin', sql.Float, criterios.supMin);
+            condiciones.push('TRY_CAST(p.SUP_TER AS FLOAT) >= @supMin');
+        }
+        if (!isNaN(criterios.supMax)) {
+            request.input('supMax', sql.Float, criterios.supMax);
+            condiciones.push('TRY_CAST(p.SUP_TER AS FLOAT) <= @supMax');
+        }
+        if (!isNaN(criterios.frenteMin)) {
+            request.input('frenteMin', sql.Float, criterios.frenteMin);
+            condiciones.push('TRY_CAST(p.MET_FRENTE AS FLOAT) >= @frenteMin');
+        }
+        if (!isNaN(criterios.frenteMax)) {
+            request.input('frenteMax', sql.Float, criterios.frenteMax);
+            condiciones.push('TRY_CAST(p.MET_FRENTE AS FLOAT) <= @frenteMax');
+        }
+        if (criterios.edificacion) {
+            request.input('edificacion', sql.VarChar, criterios.edificacion);
+            condiciones.push("UPPER(LTRIM(RTRIM(p.BAL_EDIF))) LIKE '%' + UPPER(@edificacion) + '%'");
+        }
+        if (criterios.barrio) {
+            request.input('barrio', sql.VarChar, criterios.barrio);
+            condiciones.push("UPPER(LTRIM(RTRIM(p.BARRIO))) LIKE '%' + UPPER(@barrio) + '%'");
+        }
+        if (criterios.zonificacion) {
+            request.input('zonificacion', sql.VarChar, criterios.zonificacion);
+            condiciones.push("UPPER(LTRIM(RTRIM(f.CONCEPTO))) LIKE '%' + UPPER(@zonificacion) + '%'");
+        }
+
+        request.input('maxRows', sql.Int, MAX_ROWS);
+
+        // La zonificación vive en otra vista. Se trae con OUTER APPLY TOP 1 en
+        // lugar de un LEFT JOIN: una parcela puede tener varios frentes, y con
+        // JOIN aparecería repetida una vez por cada uno.
+        const consulta = `
+            SELECT DISTINCT TOP (@maxRows)
+                LTRIM(RTRIM(p.NRO_RENTA)) AS PADRON,
+                LTRIM(RTRIM(p.NOMENCLA))  AS NOMENCLA,
+                p.SUP_TER,
+                p.MET_FRENTE,
+                LTRIM(RTRIM(p.BAL_EDIF))  AS BAL_EDIF,
+                LTRIM(RTRIM(p.BARRIO))    AS BARRIO,
+                LTRIM(RTRIM(f.CONCEPTO))  AS ZONIFICACION
+            FROM PROGRAM.dbo.VI_GIS_CATASTRO_PADRON p
+            OUTER APPLY (
+                SELECT TOP 1 CONCEPTO
+                FROM PROGRAM.dbo.VI_CPAR_FRENTES
+                WHERE LTRIM(RTRIM(NRO_RENTAS)) = LTRIM(RTRIM(p.NRO_RENTA))
+            ) f
+            WHERE ${condiciones.join(' AND ')}
+            ORDER BY LTRIM(RTRIM(p.NRO_RENTA))
+        `;
+
+        const resultado = await request.query(consulta);
+        res.json(resultado.recordset);
+
+    } catch (err) {
+        console.error('❌ Error en la búsqueda combinada:', err);
+        res.status(500).json({ error: 'Error al consultar la base municipal.' });
+    }
+});
+
+// ============================================================================
+// ENDPOINT: VALORES DISPONIBLES PARA LOS FILTROS
+// ----------------------------------------------------------------------------
+// Devuelve las zonificaciones y los barrios que existen realmente en la base,
+// para poder ofrecerlos en una lista en vez de que el operador tenga que
+// adivinar cómo se escriben. Se consulta una sola vez al abrir el visor.
+// ============================================================================
+app.get('/api/opciones', async (req, res) => {
+    const activePool = getPool();
+
+    if (!activePool) {
+        if (MODO_DEMO) {
+            return res.json({
+                _DEMO: true,
+                zonificaciones: ['RESIDENCIAL R1', 'RESIDENCIAL R2', 'COMERCIAL C1', 'INDUSTRIAL', 'RURAL'],
+                barrios: ['CENTRO DEMO', 'BARRIO DEMO', 'BALNEARIO DEMO', 'RINCON DEMO']
+            });
+        }
+        return res.status(503).json({ error: 'Base de datos municipal no disponible en este momento.' });
+    }
+
+    try {
+        const [zonas, barrios] = await Promise.all([
+            activePool.request().query(`
+                SELECT DISTINCT LTRIM(RTRIM(CONCEPTO)) AS valor
+                FROM PROGRAM.dbo.VI_CPAR_FRENTES
+                WHERE CONCEPTO IS NOT NULL AND LTRIM(RTRIM(CONCEPTO)) <> ''
+                ORDER BY valor
+            `),
+            activePool.request().query(`
+                SELECT DISTINCT LTRIM(RTRIM(BARRIO)) AS valor
+                FROM PROGRAM.dbo.VI_GIS_CATASTRO_PADRON
+                WHERE BARRIO IS NOT NULL AND LTRIM(RTRIM(BARRIO)) <> '' AND ACTIVO = 1
+                ORDER BY valor
+            `)
+        ]);
+
+        res.json({
+            zonificaciones: zonas.recordset.map((r) => r.valor),
+            barrios: barrios.recordset.map((r) => r.valor)
+        });
+    } catch (err) {
+        console.error('❌ Error al leer las opciones de filtro:', err);
+        res.status(500).json({ error: 'Error al consultar la base municipal.' });
     }
 });
 

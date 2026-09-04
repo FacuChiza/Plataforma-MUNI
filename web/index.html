@@ -28,7 +28,7 @@
          El ?v= es control de version: al desplegar un cambio se sube el
          numero para que ningun navegador siga usando la copia vieja.
          ================================================================== -->
-    <link rel="stylesheet" href="css/app.css?v=16">
+    <link rel="stylesheet" href="css/app.css?v=18">
 </head>
 <body class="bg-slate-50 flex flex-col">
 
@@ -81,78 +81,103 @@
                 <!-- SISTEMA MODULAR DE FILTROS DESPLEGABLES -->
                 <div class="border-t border-slate-200 pt-4 flex-shrink-0">
                     
-                    <!-- ITEM DE FILTRO 1: SUPERFICIE -->
-                    <div class="filter-group mb-3">
-                        <button onclick="toggleFilter('filter-superficie-content', 'icon-superficie')" class="w-full flex items-center justify-between bg-slate-100 hover:bg-slate-200 px-3 py-2 border border-slate-200 transition-colors focus:outline-none">
+                <!-- ==============================================================
+                     BÚSQUEDA POR FILTROS COMBINADOS
+                     Antes había un panel por criterio y cada uno hacía su
+                     propia consulta, así que no se podían cruzar: para pedir
+                     "baldíos de más de 500 m² en el Centro" había que filtrar
+                     por uno, anotar, y comparar a mano.
+                     Ahora todos los criterios se envían juntos y se combinan
+                     con Y: los que se dejan vacíos, no filtran.
+                     ============================================================== -->
+                <div class="filter-group mb-3">
+                    <button onclick="toggleFilter('filter-panel-content', 'icon-filtros')" class="w-full flex items-center justify-between bg-slate-100 hover:bg-slate-200 px-3 py-2 border border-slate-200 transition-colors focus:outline-none">
+                        <div class="flex items-center gap-2">
+                            <span class="material-icons text-slate-500 text-lg">tune</span>
+                            <h2 class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Buscar parcelas</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span id="filtros-activos" class="hidden bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 leading-none">0</span>
+                            <span id="icon-filtros" class="material-icons text-slate-500 text-sm transition-transform duration-300">expand_more</span>
+                        </div>
+                    </button>
+
+                    <div id="filter-panel-content" class="hidden bg-slate-50 border border-t-0 border-slate-200 rounded-none shadow-sm">
+
+                        <!-- Superficie -->
+                        <div class="px-4 pt-4 pb-3">
+                            <label class="text-[8px] font-black text-slate-400 uppercase block mb-1.5">Superficie del terreno (m²)</label>
                             <div class="flex items-center gap-2">
-                                <span class="material-icons text-slate-500 text-lg">square_foot</span>
-                                <h2 class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Filtro de Superficie</h2>
-                            </div>
-                            <span id="icon-superficie" class="material-icons text-slate-500 text-sm transition-transform duration-300">expand_more</span>
-                        </button>
-                        
-                        <div id="filter-superficie-content" class="hidden space-y-3 bg-slate-50 p-4 border border-t-0 border-slate-200 rounded-none shadow-sm transition-all">
-                            <div>
-                                <label class="text-[8px] font-black text-slate-400 uppercase block mb-1">Mínima (m²)</label>
-                                <input type="number" id="filter-sup-min" placeholder="Ej: 500" 
-                                    class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
-                            </div>
-                            <div>
-                                <label class="text-[8px] font-black text-slate-400 uppercase block mb-1">Máxima (m²)</label>
-                                <input type="number" id="filter-sup-max" placeholder="Ej: 1500" 
-                                    class="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
-                            </div>
-                            <div class="flex gap-2 pt-2">
-                                <button onclick="aplicarFiltroSuperficie()" 
-                                    class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-none text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg">
-                                    Filtrar
-                                </button>
-                                <button onclick="limpiarFiltroSuperficie()" 
-                                    class="bg-slate-300 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-none text-[10px] font-black uppercase tracking-wider transition-colors">
-                                    Limpiar
-                                </button>
-                            </div>
-                            <div id="filter-results-counter" class="text-[9px] font-bold text-slate-500 uppercase mt-2 hidden text-center pt-2 border-t border-slate-200">
+                                <input type="number" id="filtro-sup-min" placeholder="Desde" min="0"
+                                    class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                <span class="text-slate-400 text-xs">—</span>
+                                <input type="number" id="filtro-sup-max" placeholder="Hasta" min="0"
+                                    class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
                             </div>
                         </div>
-                    </div>
 
-                    <!-- ITEM DE FILTRO 2: ESTADO DE EDIFICACIÓN -->
-                    <div class="filter-group mb-3">
-                        <button onclick="toggleFilter('filter-edificacion-content', 'icon-edificacion')" class="w-full flex items-center justify-between bg-slate-100 hover:bg-slate-200 px-3 py-2 border border-slate-200 transition-colors focus:outline-none">
+                        <!-- Metros de frente -->
+                        <div class="px-4 pb-3">
+                            <label class="text-[8px] font-black text-slate-400 uppercase block mb-1.5">Metros de frente</label>
                             <div class="flex items-center gap-2">
-                                <span class="material-icons text-slate-500 text-lg">house</span>
-                                <h2 class="text-[10px] font-black text-slate-600 uppercase tracking-widest">Estado de Finca</h2>
-                            </div>
-                            <span id="icon-edificacion" class="material-icons text-slate-500 text-sm transition-transform duration-300">expand_more</span>
-                        </button>
-                        
-                        <div id="filter-edificacion-content" class="hidden space-y-3 bg-slate-50 p-4 border border-t-0 border-slate-200 rounded-none shadow-sm transition-all">
-                            <div class="space-y-3 pb-1">
-                                <label class="flex items-center gap-2 cursor-pointer group">
-                                    <input type="radio" name="filtro-edificacion" value="EDIFICADO" class="w-4 h-4 text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer">
-                                    <span class="text-[10px] font-bold text-slate-600 uppercase group-hover:text-emerald-700 transition-colors">Edificado</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer group">
-                                    <input type="radio" name="filtro-edificacion" value="BALDIO" class="w-4 h-4 text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer">
-                                    <span class="text-[10px] font-bold text-slate-600 uppercase group-hover:text-emerald-700 transition-colors">Baldío</span>
-                                </label>
-                            </div>
-                            <div class="flex gap-2 pt-2 border-t border-slate-200">
-                                <button onclick="aplicarFiltroEdificacion()" 
-                                    class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-none text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg">
-                                    Filtrar
-                                </button>
-                                <button onclick="limpiarFiltroEdificacion()" 
-                                    class="bg-slate-300 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-none text-[10px] font-black uppercase tracking-wider transition-colors">
-                                    Limpiar
-                                </button>
-                            </div>
-                            <div id="filter-edif-results-counter" class="text-[9px] font-bold text-slate-500 uppercase mt-2 hidden text-center pt-2 border-t border-slate-200">
+                                <input type="number" id="filtro-frente-min" placeholder="Desde" min="0"
+                                    class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                <span class="text-slate-400 text-xs">—</span>
+                                <input type="number" id="filtro-frente-max" placeholder="Hasta" min="0"
+                                    class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
                             </div>
                         </div>
-                    </div>
 
+                        <!-- Estado de la finca -->
+                        <div class="px-4 pb-3">
+                            <label class="text-[8px] font-black text-slate-400 uppercase block mb-1.5">Estado de la finca</label>
+                            <div class="flex gap-1">
+                                <label class="flex-1">
+                                    <input type="radio" name="filtro-edificacion" value="" class="sr-only peer" checked>
+                                    <span class="block text-center text-[9px] font-bold uppercase py-1.5 border border-slate-300 bg-white text-slate-500 cursor-pointer peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-600 transition-colors">Todas</span>
+                                </label>
+                                <label class="flex-1">
+                                    <input type="radio" name="filtro-edificacion" value="EDIFICADO" class="sr-only peer">
+                                    <span class="block text-center text-[9px] font-bold uppercase py-1.5 border border-slate-300 bg-white text-slate-500 cursor-pointer peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-600 transition-colors">Edificado</span>
+                                </label>
+                                <label class="flex-1">
+                                    <input type="radio" name="filtro-edificacion" value="BALDIO" class="sr-only peer">
+                                    <span class="block text-center text-[9px] font-bold uppercase py-1.5 border border-slate-300 bg-white text-slate-500 cursor-pointer peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-600 transition-colors">Baldío</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Zonificación -->
+                        <div class="px-4 pb-3">
+                            <label class="text-[8px] font-black text-slate-400 uppercase block mb-1.5">Zonificación</label>
+                            <select id="filtro-zonificacion"
+                                class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                <option value="">Todas</option>
+                            </select>
+                        </div>
+
+                        <!-- Barrio -->
+                        <div class="px-4 pb-3">
+                            <label class="text-[8px] font-black text-slate-400 uppercase block mb-1.5">Barrio</label>
+                            <select id="filtro-barrio"
+                                class="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-none text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+
+                        <div class="flex gap-2 px-4 pb-4 pt-1 border-t border-slate-200">
+                            <button onclick="aplicarFiltros()"
+                                class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-none text-[10px] font-black uppercase tracking-wider transition-colors shadow-lg">
+                                Buscar
+                            </button>
+                            <button onclick="limpiarFiltros()"
+                                class="bg-slate-300 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-none text-[10px] font-black uppercase tracking-wider transition-colors">
+                                Limpiar
+                            </button>
+                        </div>
+
+                        <div id="filtro-resumen" class="hidden text-[9px] font-bold text-slate-500 uppercase text-center px-4 pb-4"></div>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -313,7 +338,7 @@
 
     <!-- Logica del visor: mapa, ficha, plancheta y filtros -->
     <!-- config.js va primero: define a qué servidor le pide los datos app.js -->
-    <script src="js/config.js?v=16"></script>
-    <script src="js/app.js?v=16"></script>
+    <script src="js/config.js?v=18"></script>
+    <script src="js/app.js?v=18"></script>
 </body>
 </html>

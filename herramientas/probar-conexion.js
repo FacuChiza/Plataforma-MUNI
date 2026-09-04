@@ -23,7 +23,7 @@
  * USO
  *   node herramientas/probar-conexion.js
  *
- *   Lee la configuración de VISUALIZADOR/.env. No pide ni muestra la
+ *   Lee la configuración de servidor/.env. No pide ni muestra la
  *   contraseña.
  *
  * SEGURIDAD
@@ -37,7 +37,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const DIR_APP = path.join(__dirname, '..', 'VISUALIZADOR');
+const DIR_APP = path.join(__dirname, '..', 'servidor');
 require('dotenv').config({ path: path.join(DIR_APP, '.env') });
 
 let sql;
@@ -46,7 +46,7 @@ try {
 } catch (e) {
     console.error('\n  ERROR: no se encontró el paquete mssql.');
     console.error('  Instalar las dependencias primero:\n');
-    console.error('    cd VISUALIZADOR && npm install\n');
+    console.error('    cd servidor && npm install\n');
     process.exit(2);
 }
 

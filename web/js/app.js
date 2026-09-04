@@ -578,7 +578,7 @@
 
                 const subparc = p.SUBPARCELA || '---';
                 const padron = p.NRO_RENTA || p.PADRON || '-';
-                const origen = window.location.origin;
+                const origen = CONFIG.API_BASE || window.location.origin;
 
                 const ahora = new Date();
                 const fechaEmision = ahora.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -1139,7 +1139,7 @@ ${p._DEMO ? `
             if ((padronId && padronId !== "") || (nomenclaturaId && nomenclaturaId !== "")) {
                 try {
                     const params = new URLSearchParams({ padron: padronId, nomenclatura: nomenclaturaId });
-                    const urlApi = `${window.location.origin}/api/catastro?${params.toString()}`;
+                    const urlApi = CONFIG.url(`api/catastro?${params.toString()}`);
                     const response = await fetch(urlApi);
                     if (response.ok) datosSQL = await response.json();
                 } catch (error) {
@@ -1328,7 +1328,7 @@ ${p._DEMO ? `
                 if (minInput) params.append('min', minInput);
                 if (maxInput) params.append('max', maxInput);
 
-                const response = await fetch(`${window.location.origin}/api/superficie?${params.toString()}`);
+                const response = await fetch(CONFIG.url(`api/superficie?${params.toString()}`));
                 if (!response.ok) throw new Error("Error en el servidor municipal.");
 
                 const data = await response.json();
@@ -1362,7 +1362,7 @@ ${p._DEMO ? `
             document.getElementById('loader').style.display = 'flex';
 
             try {
-                const response = await fetch(`${window.location.origin}/api/edificacion?tipo=${tipoSeleccionado}`);
+                const response = await fetch(CONFIG.url(`api/edificacion?tipo=${tipoSeleccionado}`));
                 if (!response.ok) throw new Error("Error en el servidor municipal.");
 
                 const data = await response.json();
@@ -1401,8 +1401,8 @@ ${p._DEMO ? `
                 const cacheBuster = `?t=${Date.now()}`;
 
                 console.log("📥 Descargando archivo estático de etiquetas con anti-caché:");
-                let resL = await fetch(`datos/MerloPuntosNomeclaParcelasV2.json${cacheBuster}`);
-                if (!resL.ok) resL = await fetch(`MerloPuntosNomeclaParcelasV2.json${cacheBuster}`);
+                let resL = await fetch(CONFIG.url(`datos/MerloPuntosNomeclaParcelasV2.json`) + cacheBuster);
+                if (!resL.ok) resL = await fetch(CONFIG.url(`MerloPuntosNomeclaParcelasV2.json`) + cacheBuster);
                 
                 if (resL.ok) {
                     const dataL = await resL.json();
@@ -1416,8 +1416,8 @@ ${p._DEMO ? `
                     console.error("❌ Fallo crítico de carga: No se localizó 'MerloPuntosNomeclaParcelasV2.json'");
                 }
 
-                let resB = await fetch(`datos/MerloBarrios.json${cacheBuster}`);
-                if (!resB.ok) resB = await fetch(`MerloBarrios.json${cacheBuster}`);
+                let resB = await fetch(CONFIG.url(`datos/MerloBarrios.json`) + cacheBuster);
+                if (!resB.ok) resB = await fetch(CONFIG.url(`MerloBarrios.json`) + cacheBuster);
                 if (resB.ok) {
                     const dataB = await resB.json();
                     L.geoJSON(dataB, {
@@ -1429,16 +1429,16 @@ ${p._DEMO ? `
                 }
 
                 try {
-                    let resE = await fetch(`datos/Edificado2026.json${cacheBuster}`);
-                    if (!resE.ok) resE = await fetch(`Edificado2026.json${cacheBuster}`);
+                    let resE = await fetch(CONFIG.url(`datos/Edificado2026.json`) + cacheBuster);
+                    if (!resE.ok) resE = await fetch(CONFIG.url(`Edificado2026.json`) + cacheBuster);
                     if (resE.ok) {
                         const dataE = await resE.json();
                         L.geoJSON(dataE, { style: { color: '#dc2626', weight: 1.2, fillColor: '#ef4444', fillOpacity: 0.25 } }).addTo(edificadoLayer);
                     }
                 } catch (errEdificado) { console.warn("⚠️ No se pudo cargar la capa Edificado2026.json:", errEdificado); }
 
-                let res = await fetch(`datos/Merlo2026Parcelas-V1.json${cacheBuster}`);
-                if (!res.ok) res = await fetch(`Merlo2026Parcelas-V1.json${cacheBuster}`);
+                let res = await fetch(CONFIG.url(`datos/Merlo2026Parcelas-V1.json`) + cacheBuster);
+                if (!res.ok) res = await fetch(CONFIG.url(`Merlo2026Parcelas-V1.json`) + cacheBuster);
                 
                 if (res.ok) {
                     const data = await res.json();
@@ -1520,9 +1520,9 @@ ${p._DEMO ? `
                 }
 
                 console.log("📥 Descargando nuevo archivo de Manzanas:");
-                let resM = await fetch(`datos/MerloPuntosNomeclaManzanas.json${cacheBuster}`);
-                if (!resM.ok) resM = await fetch(`MerloPuntosNomeclaManzanas.json${cacheBuster}`);
-                if (!resM.ok) resM = await fetch(`datos/MerloTextoNomeclaManzanas.json${cacheBuster}`);
+                let resM = await fetch(CONFIG.url(`datos/MerloPuntosNomeclaManzanas.json`) + cacheBuster);
+                if (!resM.ok) resM = await fetch(CONFIG.url(`MerloPuntosNomeclaManzanas.json`) + cacheBuster);
+                if (!resM.ok) resM = await fetch(CONFIG.url(`datos/MerloTextoNomeclaManzanas.json`) + cacheBuster);
                 
                 if (resM.ok) {
                     const dataM = await resM.json();

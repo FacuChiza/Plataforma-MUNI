@@ -66,7 +66,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DIR_DATOS = path.join(__dirname, '..', 'VISUALIZADOR', 'datos');
+const DIR_DATOS = path.join(__dirname, '..', 'web', 'datos');
 const ARCHIVO_PARCELAS = path.join(DIR_DATOS, 'Merlo2026Parcelas-V1.json');
 const ARCHIVO_PUNTOS = path.join(DIR_DATOS, 'MerloPuntosNomeclaParcelasV2.json');
 const ARCHIVO_BASE = path.join(__dirname, 'linea-base.json');
@@ -79,7 +79,7 @@ function cargar(ruta, nombre) {
         console.error(`\n  ERROR: no se encontró ${nombre}`);
         console.error(`  Ruta esperada: ${ruta}`);
         console.error(`  Los GeoJSON no se versionan en git (ver .gitignore).`);
-        console.error(`  Copiarlos desde el servidor a VISUALIZADOR/datos/ antes de correr esto.\n`);
+        console.error(`  Copiarlos desde el servidor a web/datos/ antes de correr esto.\n`);
         process.exit(2);
     }
     return JSON.parse(fs.readFileSync(ruta, 'utf8')).features;

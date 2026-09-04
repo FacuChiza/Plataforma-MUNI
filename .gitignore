@@ -26,9 +26,12 @@ npm-debug.log*
 
 # --- Datos derivados --------------------------------------------------------
 # GeoJSON exportados desde el DWG (~46 MB por carga). Ver nota al pie.
-datos/*.json
-VISUALIZADOR/datos/*.json
-VISUALIZADOR/img/*.json
+web/datos/*.json
+
+# --- Carpeta de material sin clasificar -------------------------------------
+# Archivos apartados a la espera de una decision (ver _revisar/LEEME.md).
+_revisar/*
+!_revisar/LEEME.md
 
 # --- Sistema operativo / editores -------------------------------------------
 Thumbs.db

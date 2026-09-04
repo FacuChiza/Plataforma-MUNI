@@ -28,7 +28,7 @@
          El ?v= es control de version: al desplegar un cambio se sube el
          numero para que ningun navegador siga usando la copia vieja.
          ================================================================== -->
-    <link rel="stylesheet" href="app.css?v=10">
+    <link rel="stylesheet" href="css/app.css?v=11">
 </head>
 <body class="bg-slate-50 flex flex-col">
 
@@ -312,6 +312,8 @@
 
 
     <!-- Logica del visor: mapa, ficha, plancheta y filtros -->
-    <script src="app.js?v=10"></script>
+    <!-- config.js va primero: define a qué servidor le pide los datos app.js -->
+    <script src="js/config.js?v=11"></script>
+    <script src="js/app.js?v=11"></script>
 </body>
 </html>

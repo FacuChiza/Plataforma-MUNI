@@ -1,7 +1,7 @@
 // ============================================================================
 // SERVIDOR GIS MUNICIPAL - VILLA DE MERLO
 // ----------------------------------------------------------------------------
-// Refactor de arquitectura (Fase 1 - Backend). NO se modificó Index.html.
+// API de consulta catastral. El frontend vive en la carpeta web/.
 // Objetivos de este pase:
 //   1. Eliminar el anti-patrón de reconexión a SQL Server en cada request.
 //   2. Sacar las credenciales del código fuente (variables de entorno).
@@ -219,13 +219,18 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-app.use(express.static(path.join(__dirname, '/'), {
+// El frontend vive en la carpeta hermana web/. Está separado del servidor a
+// propósito: así se puede desplegar por su cuenta (por ejemplo en Vercel)
+// apuntando a esta API, sin arrastrar el backend.
+const DIR_WEB = path.join(__dirname, '..', 'web');
+
+app.use(express.static(DIR_WEB, {
     maxAge: '1d',
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.json')) {
             res.setHeader('Cache-Control', 'public, max-age=3600');
         } else if (filePath.endsWith('.js') || filePath.endsWith('.css') || filePath.endsWith('.html')) {
-            // El código de la app (app.js, app.css, Index.html) se revalida
+            // El código de la app (app.js, app.css, index.html) se revalida
             // SIEMPRE contra el servidor.
             //
             // Por qué: con maxAge de 1 día, un municipal que ya abrió el visor
@@ -494,13 +499,13 @@ app.get('/api/catastro', async (req, res) => {
 //    app.js aunque el servidor ya tenga la nueva: un deploy no llegaría a los
 //    municipales hasta que vaciaran el caché a mano.
 //
-// 2. 'Index.html' con I mayúscula, como el archivo en disco. Windows no
-//    distingue mayúsculas y por eso 'index.html' funcionaba igual acá, pero en
-//    un servidor Linux esta ruta devolvería un error de archivo inexistente.
+// 2. El archivo se llama 'index.html', todo en minúsculas, igual que en el
+//    disco. Windows no distingue mayúsculas, pero un servidor Linux sí, y una
+//    diferencia de mayúscula ahí devuelve un error de archivo inexistente.
 // ============================================================================
 app.get('/', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
-    res.sendFile(path.join(__dirname, 'Index.html'));
+    res.sendFile(path.join(DIR_WEB, 'index.html'));
 });
 
 // ============================================================================

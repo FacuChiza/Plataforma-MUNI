@@ -463,4 +463,12 @@ function main() {
     process.exit(1);
 }
 
-main();
+// Solo corre el diagnóstico si se lo invoca directamente. Si otro script lo
+// hace require(), lo que obtiene son las funciones: así comparar-datos.js
+// reutiliza EXACTAMENTE este algoritmo en vez de tener su propia copia, que
+// podría quedar desincronizada sin que nadie se dé cuenta.
+if (require.main === module) {
+    main();
+}
+
+module.exports = { getPointInLayer, resolverClaves, isPointInPolygon, formatNum, resolverTodo };

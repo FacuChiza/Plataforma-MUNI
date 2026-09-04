@@ -2,13 +2,27 @@
 // SERVIDOR GIS MUNICIPAL - VILLA DE MERLO
 // ----------------------------------------------------------------------------
 // API de consulta catastral. El frontend vive en la carpeta web/.
-// Objetivos de este pase:
-//   1. Eliminar el anti-patrón de reconexión a SQL Server en cada request.
-//   2. Sacar las credenciales del código fuente (variables de entorno).
-//   3. Endurecer los endpoints espaciales contra descargas masivas.
-//   4. Dejar el servidor "observable" (health check) y con apagado ordenado.
-// Las rutas y el formato de respuesta JSON se mantienen IDÉNTICOS al
-// original para no romper ningún fetch() del frontend.
+//
+// LA REGLA QUE ORDENA TODO
+//   La geometría sale de los archivos GeoJSON. Todo lo demás sale de la base.
+//
+//   El GeoJSON de parcelas trae por polígono únicamente la forma, el
+//   NRO_RENTA y la NOMENCLA. Ni superficie, ni titular, ni zonificación, ni
+//   estado de edificación: eso vive en la base municipal y se consulta acá, en
+//   vivo. Por eso el mapa se ve aunque no haya conexión, y las fichas no.
+//
+//   Consecuencia práctica: los filtros por superficie, frente, estado, zona y
+//   barrio dependen ENTERAMENTE de esta API. El visor no puede calcular
+//   ninguno de esos valores por su cuenta.
+//
+// SIN CONEXIÓN
+//   Cada endpoint decide solo: si hay pool, consulta la base; si no lo hay y
+//   MODO_DEMO está activo, responde con datos inventados y lo avisa con la
+//   cabecera X-Datos-De-Prueba. No hay que tocar código para pasar de un modo
+//   al otro: en cuanto el servidor pueda conectarse, usa la base.
+//
+//   Ver docs/conexion-con-la-base.md para el detalle de qué campo sale de qué
+//   vista y qué falta confirmar contra la base real.
 // ============================================================================
 
 require('dotenv').config(); // Carga variables desde .env (no versionado en git)
@@ -285,6 +299,15 @@ function getPool() {
 // ============================================================================
 app.use(compression());
 
+// La cabecera X-Datos-De-Prueba tiene que poder leerse desde el navegador aun
+// cuando el frontend esté publicado en otro dominio (por ejemplo en Vercel,
+// con la API corriendo dentro de la Municipalidad). Sin exponerla, el visor no
+// puede avisar que los datos no son reales.
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Expose-Headers', 'X-Datos-De-Prueba');
+    next();
+});
+
 // helmet agrega cabeceras de seguridad estándar (X-Content-Type-Options,
 // X-Frame-Options, HSTS, etc.).
 //
@@ -467,6 +490,7 @@ app.get('/api/catastro', async (req, res) => {
         // Sin base: datos de prueba si se pidió expresamente, y si no el 503
         // de siempre. Ver el comentario de MODO_DEMO más arriba.
         if (MODO_DEMO && padron) {
+            res.setHeader('X-Datos-De-Prueba', 'true');
             return res.json(fichaDePrueba(padron, nomenclatura));
         }
         return res.status(503).json({ error: 'Base de datos municipal no disponible en este momento.' });
@@ -602,7 +626,15 @@ app.get('/api/filtrar', async (req, res) => {
     };
 
     if (!activePool) {
-        if (MODO_DEMO) return res.json(filtrarDePrueba(criterios));
+        if (MODO_DEMO) {
+            // Estos endpoints devuelven un ARRAY, así que no se les puede
+            // agregar un campo _DEMO adentro sin cambiarles el formato. La
+            // marca va por cabecera, y el visor la lee para avisar en pantalla.
+            // Sin este aviso, una búsqueda sin conexión devuelve superficies
+            // inventadas con la misma cara que las reales.
+            res.setHeader('X-Datos-De-Prueba', 'true');
+            return res.json(filtrarDePrueba(criterios));
+        }
         return res.status(503).json({ error: 'Base de datos municipal no disponible en este momento.' });
     }
 
@@ -647,6 +679,10 @@ app.get('/api/filtrar', async (req, res) => {
         // La zonificación vive en otra vista. Se trae con OUTER APPLY TOP 1 en
         // lugar de un LEFT JOIN: una parcela puede tener varios frentes, y con
         // JOIN aparecería repetida una vez por cada uno.
+        // ACÁ es donde la superficie, el frente, el estado y el barrio salen
+        // de la base. Mientras no haya conexión los devuelve filtrarDePrueba()
+        // con valores inventados; esta consulta es la definitiva y no hay que
+        // cambiarla cuando la conexión exista.
         const consulta = `
             SELECT DISTINCT TOP (@maxRows)
                 LTRIM(RTRIM(p.NRO_RENTA)) AS PADRON,
@@ -687,6 +723,7 @@ app.get('/api/opciones', async (req, res) => {
 
     if (!activePool) {
         if (MODO_DEMO) {
+            res.setHeader('X-Datos-De-Prueba', 'true');
             return res.json({
                 _DEMO: true,
                 zonificaciones: ['RESIDENCIAL R1', 'RESIDENCIAL R2', 'COMERCIAL C1', 'INDUSTRIAL', 'RURAL'],

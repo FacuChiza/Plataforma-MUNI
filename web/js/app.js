@@ -1444,6 +1444,17 @@ ${p._DEMO ? `
         // Antes había una función por criterio y cada una hacía su consulta por
         // separado, así que no se podían cruzar. Ahora se leen todos los campos
         // del panel, se mandan juntos, y el servidor los combina con Y.
+        //
+        // DE DÓNDE SALEN ESTOS DATOS
+        //   La superficie, los metros de frente, el estado de la finca, la
+        //   zonificación y el barrio NO están en el GeoJSON: vienen todos de la
+        //   base municipal, vía /api/filtrar. El visor solo sabe la forma de
+        //   cada parcela, su nomenclatura y su número de renta.
+        //
+        //   Por eso, sin conexión a la base, el filtrado no puede hacerse del
+        //   lado del navegador ni siquiera parcialmente. Lo que se pinta con
+        //   MODO_DEMO son superficies inventadas por el servidor, y por eso el
+        //   resultado se marca en pantalla como datos de prueba.
         // ====================================================================
 
         /** Lee el panel y arma los criterios. Los campos vacíos no filtran. */
@@ -1523,6 +1534,14 @@ ${p._DEMO ? `
                     throw new Error(detalle.error || 'No se pudo consultar la base municipal.');
                 }
 
+                // ¿Vienen de la base o son datos de prueba? La superficie, el
+                // frente, la zonificación y el estado de la finca SIEMPRE salen
+                // de la base municipal. Cuando no hay conexión y el modo de
+                // prueba está activo, el servidor los inventa y lo avisa por
+                // esta cabecera. Hay que decirlo en pantalla: una superficie
+                // inventada tiene exactamente la misma cara que una real.
+                const sonDePrueba = respuesta.headers.get('X-Datos-De-Prueba') === 'true';
+
                 const datos = await respuesta.json();
 
                 const resumen = document.getElementById('filtro-resumen');
@@ -1530,14 +1549,21 @@ ${p._DEMO ? `
                     ? 'Sin resultados para esos criterios'
                     : `${datos.length} parcela${datos.length > 1 ? 's' : ''} encontrada${datos.length > 1 ? 's' : ''}`;
                 resumen.classList.remove('hidden');
+                resumen.classList.toggle('resumen-demo', sonDePrueba);
+                if (sonDePrueba) {
+                    resumen.textContent += ' · DATOS DE PRUEBA';
+                }
 
                 document.getElementById('filtros-activos').textContent = activos.length;
                 document.getElementById('filtros-activos').classList.remove('hidden');
 
                 if (datos.length > 0) {
                     const config = { color: '#7c3aed', fillColor: '#7c3aed', weight: 2, fillOpacity: 0.45 };
-                    paintMapFromFilter(datos, config, 'combinado');
-                    abrirModalResultados(`Búsqueda: ${activos.join(' · ')}`, datos, 'SUP_TER', config, 'combinado');
+                    paintMapFromFilter(datos, config);
+                    const encabezado = sonDePrueba
+                        ? `⚠ DATOS DE PRUEBA — ${activos.join(' · ')}`
+                        : `Búsqueda: ${activos.join(' · ')}`;
+                    abrirModalResultados(encabezado, datos, 'SUP_TER', config, 'combinado');
                 }
 
             } catch (error) {

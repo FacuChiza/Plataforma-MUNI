@@ -320,3 +320,13 @@
     color: #92400e;
 }
 .aviso-demo span { font-size: 11px; color: #78350f; line-height: 1.35; }
+
+/* Resumen de filtros cuando los datos no vienen de la base municipal.
+   Una superficie inventada se ve igual que una real: el aviso tiene que
+   estar donde el operador mira el resultado, no escondido en la consola. */
+.resumen-demo {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e !important;
+    padding: 5px 8px;
+}

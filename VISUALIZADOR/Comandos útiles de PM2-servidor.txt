@@ -1,0 +1,16 @@
+Comandos útiles de PM2:
+
+pm2 delete all:Borrar todos los procesos trabados.
+
+pm2 start server.js --name "sig-merlo": Inicia el Servidor.
+
+pm2 save: Guardar la configuración limpia.
+
+pm2 status: Para ver si el servidor está "online".
+
+pm2 stop sig-merlo: Para detenerlo temporalmente.
+
+pm2 restart sig-merlo: Si haces cambios en el código y necesitas reiniciar.
+
+pm2 logs sig-merlo: Para ver los mensajes de la consola (si hay errores).
+

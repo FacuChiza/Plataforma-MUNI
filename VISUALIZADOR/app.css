@@ -1,0 +1,322 @@
+        /* --- ESTILOS GLOBALES --- */
+        body, html { height: 100%; margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #map { height: calc(100vh - 64px); width: 100%; background: #f8fafc; }
+        
+        /* ETIQUETAS DINÁMICAS: Centradas matemáticamente sobre sus coordenadas */
+        .parcel-label, .manzana-label, .barrio-label { 
+            background: transparent !important; border: none !important; box-shadow: none !important; 
+            pointer-events: none; white-space: nowrap;
+        }
+
+        .parcel-label span {
+            display: flex; justify-content: center; align-items: center;
+            color: #000c03; font-weight: 800; font-size: 11px;
+            transform: translate(-50%, -50%);
+            text-shadow: 1px 1px 1px rgba(22, 241, 33, 0.9);
+        }
+
+        .manzana-label span {
+            display: flex; justify-content: center; align-items: center;
+            color: #1e293b; font-weight: 900; font-size: 15px;
+            transform: translate(-50%, -50%);
+            text-shadow: 2px 2px 2px #0ccee7;
+        }
+
+        .barrio-label span {
+            display: flex; justify-content: center; align-items: center;
+            color: #4338ca; 
+            font-weight: 900; font-size: 16px;
+            text-transform: uppercase;
+            transform: translate(-50%, -50%);
+            text-shadow: 0px 0px 4px #fff, 0px 0px 8px #fff;
+            letter-spacing: 1px;
+            opacity: 0.8;
+        }
+
+        /* --- CONTROLES DE INTERFAZ DEL MAPA --- */
+        .map-type-control {
+            position: absolute; bottom: 30px; left: 30px; z-index: 1000;
+            display: flex; gap: 12px; background: rgba(255,255,255,0.9);
+            padding: 8px; border-radius: 0px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+
+        .map-type-btn {
+            width: 50px; height: 50px; border-radius: 0px; cursor: pointer;
+            overflow: hidden; border: 2px solid transparent; transition: all 0.2s;
+        }
+        .map-type-btn.active { border-color: #3b82f6; }
+
+        /* Panel lateral izquierdo deslizable (Drawer) para las capas */
+        #layers-drawer { 
+            position: fixed; top: 64px; left: -320px; width: 320px; 
+            height: calc(100vh - 64px); background: white; z-index: 1500; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-right: 1px solid #e2e8f0; 
+            box-shadow: 10px 0 15px -3px rgba(0,0,0,0.05);
+        }
+        #layers-drawer.active { left: 0; }
+
+        /* Estilos del control de capas inyectado por Leaflet */
+        .custom-layer-control .leaflet-control-layers { 
+            box-shadow: none !important; 
+            border: none !important; 
+            width: 100%; 
+            background: transparent !important; 
+            font-family: inherit;
+            position: relative !important; 
+            float: none !important;        
+            margin: 0 !important;
+        }
+
+        /* Contenedor adaptativo para más de 10 capas con scroll fino */
+        #layer-control-container {
+            max-height: 250px;            
+            overflow-y: auto;             
+            padding-right: 6px;           
+        }
+        
+        #layer-control-container::-webkit-scrollbar { width: 4px; }
+        #layer-control-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+        /* Overlay de carga al imprimir la plancheta */
+        .loading-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.8); z-index: 3000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        /* Botón de impresión */
+        .print-btn {
+            background-color: #10b981; color: white; padding: 12px; border-radius: 0px;
+            font-weight: 800; display: flex; align-items: center; justify-content: center;
+            gap: 8px; transition: all 0.2s; margin-bottom: 0;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+            text-transform: uppercase; font-size: 11px; letter-spacing: 1px;
+        }
+        .print-btn:hover { background-color: #059669; transform: translateY(-2px); }
+        
+        /* Animación de carga */
+        .pulse-loading {
+            animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        
+        /* Modal Scroll */
+        .modal-scroll::-webkit-scrollbar { width: 6px; }
+        .modal-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 0px; }
+
+/* ============================================================================
+   FICHA DE PARCELA — bloques y campos
+   ----------------------------------------------------------------------------
+   Antes cada dato ocupaba una fila completa dentro de una caja con borde, así
+   que la ficha de una parcela medía varias pantallas de alto y había que
+   scrollear para ver algo tan básico como la superficie. Acá los campos van en
+   dos columnas, con los que necesitan aire (nombres, nomenclatura) ocupando el
+   ancho completo.
+   ========================================================================== */
+
+.bloque {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 12px;
+}
+.bloque:last-child { margin-bottom: 0; }
+
+.bloque-cab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+}
+.bloque-cab .material-icons { font-size: 15px; color: #047857; }
+.bloque-cab h4 {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: #475569;
+}
+
+.bloque-cuerpo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: #eef2f7;   /* hace de línea divisoria entre celdas */
+    padding: 1px;
+}
+
+.campo { background: #fff; padding: 8px 12px; min-width: 0; }
+.campo-ancho { grid-column: 1 / -1; }
+
+.campo-et {
+    display: block;
+    font-size: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: #94a3b8;
+    margin-bottom: 2px;
+}
+.campo-vl {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1e293b;
+    word-break: break-word;
+    font-variant-numeric: tabular-nums;
+}
+/* Un dato ausente tiene que distinguirse a simple vista de uno corto */
+.campo-vacio {
+    color: #cbd5e1;
+    font-weight: 500;
+    font-style: italic;
+    font-size: 11px;
+}
+
+/* Chips de sección / manzana / parcela en la cabecera del modal */
+.chip-geo {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, .13);
+    border: 1px solid rgba(255, 255, 255, .28);
+}
+.chip-geo span {
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    color: rgba(255, 255, 255, .72);
+}
+.chip-geo strong {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+}
+.chip-geo-ph {
+    background: rgba(16, 185, 129, .3);
+    border-color: rgba(16, 185, 129, .65);
+}
+
+/* ---- Refinamientos generales ---- */
+
+/* La barra de scroll de la ficha, más discreta */
+.modal-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+
+/* Foco visible en el buscador: accesibilidad y claridad de estado */
+#search-input:focus {
+    outline: 2px solid #10b981;
+    outline-offset: 1px;
+}
+
+/* La parcela seleccionada, con un realce suave que no tape el mapa base */
+.leaflet-interactive { transition: fill-opacity .15s ease; }
+
+/* ============================================================================
+   LISTA DE TITULARES
+   ----------------------------------------------------------------------------
+   Una parcela puede tener varios titulares: condominios, sucesiones y
+   propiedad horizontal. Sobre la base real son 4.645 parcelas con más de uno,
+   y una llega a 29. Por eso esto es una lista y no un campo: tiene que poder
+   crecer sin romperse ni obligar a scrollear de más.
+   ========================================================================== */
+
+.lista-titulares {
+    grid-column: 1 / -1;   /* rompe la grilla de 2 columnas del bloque */
+    background: #fff;
+}
+
+.titular {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 12px;
+    border-bottom: 1px solid #eef2f7;
+}
+.titular:last-child { border-bottom: none; }
+
+/* Numerito de orden: deja claro de un vistazo cuántos son y cuál es cuál */
+.titular-orden {
+    flex-shrink: 0;
+    width: 19px;
+    height: 19px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #047857;
+    font-size: 9.5px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    margin-top: 1px;
+}
+
+.titular-datos { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+.titular-nombre {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #1e293b;
+    word-break: break-word;
+}
+.titular-doc {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+}
+.titular-dom {
+    font-size: 10px;
+    color: #94a3b8;
+    word-break: break-word;
+}
+
+/* Contador al lado del título del bloque, cuando hay más de uno */
+.bloque-cab .contador {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 15px;
+    padding: 0 5px;
+    margin-left: 5px;
+    background: #047857;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   AVISO DE DATOS DE PRUEBA
+   Tiene que ser imposible de pasar por alto: sin este cartel, una ficha de
+   demostración se ve igual que una real y alguien podría tomarla por buena.
+   --------------------------------------------------------------------------- */
+.aviso-demo {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 13px;
+    margin-bottom: 12px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-left-width: 4px;
+}
+.aviso-demo .material-icons { font-size: 17px; color: #b45309; flex-shrink: 0; }
+.aviso-demo div { display: flex; flex-direction: column; gap: 1px; }
+.aviso-demo strong {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: #92400e;
+}
+.aviso-demo span { font-size: 11px; color: #78350f; line-height: 1.35; }

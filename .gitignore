@@ -1,0 +1,56 @@
+# ============================================================================
+# .gitignore - Sistema catastral Villa de Merlo
+# ============================================================================
+
+# --- SECRETOS: nunca versionar ---------------------------------------------
+# El .env tiene las credenciales del SQL Server municipal. Si alguna vez se
+# commitea, no alcanza con borrarlo después: queda en el historial de git y
+# hay que rotar la contraseña sí o sí.
+.env
+.env.*
+!.env.example
+
+# --- Dependencias -----------------------------------------------------------
+node_modules/
+npm-debug.log*
+
+# --- AutoCAD ----------------------------------------------------------------
+# Locks que AutoCAD crea al abrir un dibujo. No son datos, son temporales.
+*.dwl
+*.dwl2
+*.bak
+*.sv$
+
+# Dibujo mensual (~31 MB c/u). Ver nota al pie sobre por qué no va a git.
+*.dwg
+
+# --- Datos derivados --------------------------------------------------------
+# GeoJSON exportados desde el DWG (~46 MB por carga). Ver nota al pie.
+datos/*.json
+VISUALIZADOR/datos/*.json
+VISUALIZADOR/img/*.json
+
+# --- Sistema operativo / editores -------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# ============================================================================
+# NOTA: por qué el DWG y los GeoJSON no se versionan en git
+# ----------------------------------------------------------------------------
+# Git guarda una copia completa de cada versión de cada archivo binario o
+# semi-binario. El DWG (31 MB) y los GeoJSON (46 MB) cambian enteros en cada
+# carga mensual y no comprimen por diferencias. Versionarlos haría crecer el
+# repositorio ~77 MB por mes de forma irreversible: sacarlos después obliga a
+# reescribir el historial completo.
+#
+# Además son DERIVADOS: los GeoJSON se regeneran desde el DWG, y el DWG es el
+# original que ya debe tener su propio backup mensual (requisito de
+# "Recuperación" del proyecto). Git versiona el CÓDIGO y el PIPELINE que los
+# produce; el respaldo de los datos es responsabilidad del backup del servidor.
+#
+# Si más adelante se decide versionarlos igual, la herramienta correcta es
+# Git LFS, no git plano. Decisión pendiente de confirmar.
+# ============================================================================

@@ -25,8 +25,18 @@ npm-debug.log*
 *.dwg
 
 # --- Datos derivados --------------------------------------------------------
-# GeoJSON exportados desde el DWG (~46 MB por carga). Ver nota al pie.
-web/datos/*.json
+# Los GeoJSON SI se versionan, por decision del proyecto: es lo que permite que
+# el visor publicado en Vercel muestre las parcelas sin depender de un servidor
+# propio.
+#
+# Pesan 19,4 MB optimizados (herramientas/optimizar-datos.js). Tener presente
+# que cada actualizacion mensual del DWG suma ese peso al historial de git de
+# forma permanente: en un ano son unos 230 MB. Si llega a molestar, la
+# herramienta para esto es Git LFS.
+#
+# Se excluyen las carpetas de trabajo del optimizador, que son temporales.
+web/datos-optimizados/
+web/datos-originales-backup/
 
 # --- Carpeta de material sin clasificar -------------------------------------
 # Archivos apartados a la espera de una decision (ver _revisar/LEEME.md).

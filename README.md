@@ -6,21 +6,32 @@ consultada en vivo contra la base municipal.
 
 ---
 
-## ⚠️ Lo único que NO está en este repositorio
+## Instalarlo en una computadora de la Municipalidad
 
-| Falta | Dónde conseguirlo | Sin eso |
-|---|---|---|
-| `servidor/.env` | crearlo a partir de `servidor/.env.example` | las fichas salen sin datos de titular |
+**Dos doble clics, sin saber programar:**
 
-No se versiona porque tiene las credenciales de la base municipal.
+1. Descargar el ZIP con el botón verde **Code → Download ZIP**
+2. Descomprimirlo en una carpeta fija (por ejemplo `C:\VisorCatastral`)
+3. Doble clic en **`INSTALAR.bat`** — una sola vez
+4. Doble clic en **`INICIAR.bat`** — cada vez que se quiera usar
 
-Los GeoJSON **sí** están (`web/datos/`, 19,4 MB optimizados), así que al clonar
-el mapa funciona enseguida. Lo que no funciona sin `.env` y sin estar en la red
-municipal es la consulta de titulares y superficies.
+`INSTALAR.bat` verifica que esté Node.js, baja los componentes, pide los datos
+de conexión a la base y prueba que funcione, diciendo el motivo si algo falla.
+`INICIAR.bat` levanta el visor y lo abre en el navegador.
+
+La guía completa, con los problemas frecuentes y qué hacer en cada caso, está en
+**[docs/instalacion-en-la-muni.md](docs/instalacion-en-la-muni.md)**. Está
+escrita para alguien que no programa.
+
+> La computadora tiene que estar **en la red de la Municipalidad**. Si no, el
+> mapa se ve igual pero las fichas salen sin datos: la base no es accesible
+> desde afuera.
 
 ---
 
-## Puesta en marcha
+## Puesta en marcha a mano (desarrollo)
+
+Equivale a lo que hace `INSTALAR.bat`, para quien prefiera la consola:
 
 ```bash
 cd servidor
@@ -48,6 +59,14 @@ node server.js
 
 Abrir <http://localhost:8000>. El estado de la conexión se puede consultar en
 `/health`.
+
+### Lo único que no viene en el repositorio
+
+`servidor/.env`, porque tiene las credenciales de la base. Se crea a partir de
+`servidor/.env.example`, o lo genera `INSTALAR.bat` preguntando los datos.
+
+Los GeoJSON **sí** están (`web/datos/`, 19,4 MB optimizados): al descargar, el
+mapa funciona enseguida.
 
 En el servidor municipal corre con PM2:
 
@@ -78,6 +97,9 @@ Dejar en `false` en el servidor.
 ## Estructura
 
 ```
+INSTALAR.bat             instalación en un doble clic (una sola vez)
+INICIAR.bat              arranca el visor y lo abre en el navegador
+
 web/                     frontend — es lo que se publica
   index.html             maquetado del visor
   css/app.css            estilos
@@ -97,7 +119,9 @@ herramientas/            diagnóstico y verificación
   diagnostico.sql             el mismo diagnóstico para SSMS
   linea-base.json             referencia del test de equivalencia
 
-docs/                    documentación y material de referencia
+docs/                    documentación
+  instalacion-en-la-muni.md   guía paso a paso para quien no programa
+  conexion-con-la-base.md     qué campo sale de qué vista y qué falta confirmar
 ```
 
 ### Actualizar los datos del mes

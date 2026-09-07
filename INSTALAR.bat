@@ -69,6 +69,11 @@ echo.
 
 REM --------------------------------------------------------------------------
 REM  PASO 3: configuracion de la base de datos
+REM ----------------------------------------------------------------------------
+REM  Los datos se cargan editando el archivo en el Bloc de notas, y no
+REM  preguntandolos en esta ventana. Es mas simple y menos fragil: escribir una
+REM  contrasena en la consola no permite corregir errores, y el archivo ya trae
+REM  explicado que significa cada linea.
 REM --------------------------------------------------------------------------
 echo  [3/4] Configuracion de la base de datos...
 
@@ -79,58 +84,42 @@ if exist "servidor\.env" (
 )
 
 echo.
-echo        No hay configuracion todavia. Hacen falta los datos de
-echo        conexion a la base municipal. Si no los tenes a mano,
-echo        cerra esta ventana y pediselos a quien administre el sistema.
+echo        Falta cargar los datos de conexion a la base municipal.
 echo.
-
-set "DBSERVER="
-set "DBBASE="
-set "DBUSER="
-set "DBPASS="
-
-set /p DBSERVER=      Nombre o IP del servidor de base de datos:
-set /p DBBASE=      Nombre de la base de datos:
-set /p DBUSER=      Usuario:
-set /p DBPASS=      Contrasena:
-
-if "%DBSERVER%"=="" goto :faltan
-if "%DBBASE%"==""   goto :faltan
-if "%DBUSER%"==""   goto :faltan
-
-(
-echo # Configuracion del visor catastral - generada por INSTALAR.bat
-echo # Este archivo tiene las credenciales de la base municipal.
-echo # NO compartirlo ni subirlo a ningun lado.
+echo        Se va a abrir el Bloc de notas con el archivo de
+echo        configuracion. Hay que completar estas cuatro lineas:
 echo.
-echo DB_SERVER=%DBSERVER%
-echo DB_DATABASE=%DBBASE%
-echo DB_USER=%DBUSER%
-echo DB_PASSWORD=%DBPASS%
-echo DB_ENCRYPT=false
-echo DB_TRUST_CERT=true
+echo            DB_SERVER      nombre o IP del servidor de base de datos
+echo            DB_DATABASE    nombre de la base
+echo            DB_USER        usuario
+echo            DB_PASSWORD    contrasena
 echo.
-echo PORT=8000
-echo MAX_ROWS=5000
-echo RATE_LIMIT_WINDOW_MS=60000
-echo RATE_LIMIT_MAX=100
+echo        Si no tenes esos datos, pediselos a quien administre el
+echo        sistema de catastro.
 echo.
-echo # false = datos reales de la base.
-echo # Solo poner true para probar el visor sin conexion a la base.
-echo MODO_DEMO=false
-) > "servidor\.env"
-
-echo.
-echo        Configuracion guardada.
-goto :configurado
-
-:faltan
-echo.
-echo  ERROR: faltaron datos. No se guardo la configuracion.
-echo  Volve a ejecutar este archivo cuando los tengas.
+echo        Al terminar: GUARDAR con Ctrl+G y CERRAR el Bloc de notas
+echo        para que la instalacion siga.
 echo.
 pause
-exit /b 1
+
+copy /y "servidor\.env.example" "servidor\.env" >nul
+if not exist "servidor\.env" (
+    echo.
+    echo  ERROR: no se pudo crear el archivo de configuracion.
+    echo  Puede ser que la carpeta este protegida contra escritura.
+    echo  Probar moviendo el programa a otra carpeta, por ejemplo:
+    echo      C:\VisorCatastral
+    echo.
+    pause
+    exit /b 1
+)
+
+REM  start /wait deja la instalacion detenida hasta que se cierre el Bloc de
+REM  notas. Sin /wait seguiria de largo y probaria la conexion con el archivo
+REM  todavia sin completar.
+start /wait notepad "servidor\.env"
+
+echo        Configuracion guardada.
 
 :configurado
 echo.

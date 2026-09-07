@@ -114,9 +114,13 @@ servidor/                backend — corre dentro de la red municipal
   .env.example           plantilla
 
 herramientas/            diagnóstico y verificación
-  verificar-equivalencia.js   red de seguridad para refactorizar
+  verificar-equivalencia.js   que un refactor no cambie ningún resultado
+  verificar-funcionalidad.js  que no se haya perdido nada del programa original
   probar-conexion.js          diagnóstico de la base desde Node
   diagnostico.sql             el mismo diagnóstico para SSMS
+  consultas-pendientes.sql    preguntas abiertas, para correr en la muni
+  optimizar-datos.js          achica los GeoJSON del mes
+  comparar-datos.js           verifica que optimizar no cambie nada
   linea-base.json             referencia del test de equivalencia
 
 docs/                    documentación
@@ -158,6 +162,18 @@ en qué parcela y en qué difiere.
 Para verificar el código que realmente corre en el navegador (no la copia del
 script), el encabezado de ese archivo explica el procedimiento con `--hash`.
 
+Y para confirmar que no se perdió nada del programa original:
+
+```bash
+node herramientas/verificar-funcionalidad.js
+```
+
+Compara contra la copia del visor original que se conserva en `docs/` y avisa
+si quedó algún botón llamando a una función que ya no existe, algún elemento
+que el código busca y el HTML no tiene, o alguna capacidad que desapareció.
+Ese tipo de rotura no se ve al abrir el visor: se ve el día que alguien aprieta
+ese botón.
+
 ---
 
 ## Estado y pendientes
@@ -173,11 +189,25 @@ publicada con un túnel, y apuntar `web/js/config.js` a esa dirección. **Antes 
 publicar la API hay que ponerle autenticación**: tal como está, cualquiera con
 la URL podría leer los datos de todos los titulares del padrón.
 
-**Pendiente principal:** al hacer clic en una parcela, el sistema todavía
-determina de qué parcela se trata buscando el punto de nomenclatura más cercano,
-en lugar de usar el `NRO_RENTA` que el propio polígono ya tiene como atributo.
-Eso hace que 9 parcelas muestren hoy los datos de una parcela vecina, sin ningún
-error visible. Corregirlo es el próximo paso.
+**Pendiente principal:** al hacer clic en una parcela, el sistema determina de
+qué parcela se trata buscando el punto de nomenclatura más cercano, en lugar de
+usar la clave que el propio polígono ya tiene como atributo.
+
+Comparando ambos archivos: 9 parcelas reciben un padrón equivocado y **375
+reciben una nomenclatura que apunta a otra parcela**. Como el titular se busca
+por nomenclatura, en esas 375 la ficha podría estar mostrando el propietario
+equivocado, sin ningún error visible.
+
+**No está corregido a propósito.** Falta saber cuál de los dos archivos coincide
+con la base: si es el polígono, el cambio arregla esas fichas; si es el punto,
+las rompería. Lo resuelve una consulta de treinta segundos:
+
+```
+herramientas/consultas-pendientes.sql   (pregunta 1)
+```
+
+Ese archivo junta todas las preguntas que quedaron abiertas y que solo se pueden
+responder desde una computadora de la Municipalidad.
 
 ---
 

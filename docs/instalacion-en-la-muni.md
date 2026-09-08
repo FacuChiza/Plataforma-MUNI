@@ -43,9 +43,18 @@ Se abre una ventana negra que va contando los pasos. Va a:
 Cuando llegue el paso 3 se abre una ventana con cuatro campos:
 
 - **Nombre del servidor** — el equipo donde está la base, o su IP
-- **Nombre de la base**
+- **Nombre de la base (opcional)** — ver más abajo
 - **Nombre de usuario**
 - **Contraseña** — se escribe oculta
+
+> **Sobre el nombre de la base:** si en SQL Server Management Studio te conectás
+> dejando ese campo en `<predeterminado>`, acá **dejalo vacío**. `<predeterminado>`
+> no es un nombre de base: significa "usá la que corresponde a este usuario".
+>
+> Si se escribe un nombre de base que no existe, SQL Server responde
+> **`Login failed for user`** — el mismo error que da una contraseña equivocada.
+> Es de los errores más confusos que hay, porque parece un problema de
+> credenciales cuando en realidad es el nombre de la base.
 
 El botón **Probar conexión** verifica los datos antes de guardar y dice qué
 falla si algo falla. Después, **Guardar**.

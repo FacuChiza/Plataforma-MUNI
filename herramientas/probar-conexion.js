@@ -111,7 +111,10 @@ async function main() {
     console.log('\n  DIAGNÓSTICO DE CONEXIÓN - BASE MUNICIPAL');
     console.log('  ============================================================');
 
-    const requeridas = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER', 'DB_DATABASE'];
+    // DB_DATABASE no esta en la lista: es opcional. Vacio significa usar la
+    // base predeterminada del usuario, igual que "<predeterminado>" en SQL
+    // Server Management Studio.
+    const requeridas = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER'];
 
     const faltantes = requeridas.filter((v) => !process.env[v]);
     if (faltantes.length) {
@@ -139,8 +142,17 @@ async function main() {
         process.exit(2);
     }
 
+    // El nombre de la base es opcional. Vacio (o "<predeterminado>") significa
+    // usar la base por defecto del usuario, igual que en SQL Server Management
+    // Studio. Las consultas nombran la base completa (PROGRAM.dbo.VI_...), asi
+    // que funcionan igual sin especificarla en la conexion.
+    const nombreBase = String(process.env.DB_DATABASE || '').trim();
+    const basePredeterminada = nombreBase === '' ||
+                               nombreBase.toLowerCase() === '<predeterminado>' ||
+                               nombreBase.toLowerCase() === 'predeterminado';
+
     console.log(`\n  Servidor : ${process.env.DB_SERVER}`);
-    console.log(`  Base     : ${process.env.DB_DATABASE}`);
+    console.log(`  Base     : ${basePredeterminada ? '(la predeterminada del usuario)' : nombreBase}`);
     console.log(`  Usuario  : ${process.env.DB_USER}`);
     console.log(`  Cifrado  : ${process.env.DB_ENCRYPT === 'true' ? 'sí' : 'no'}`);
 
@@ -148,7 +160,7 @@ async function main() {
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         server: process.env.DB_SERVER,
-        database: process.env.DB_DATABASE,
+        ...(basePredeterminada ? {} : { database: nombreBase }),
         connectionTimeout: 15000,
         requestTimeout: 60000,
         options: {
@@ -172,8 +184,22 @@ async function main() {
             console.error('  la red municipal, o el nombre cambió. Probar con la IP directa');
             console.error('  en DB_SERVER, o conectarse por VPN.');
         } else if (m.includes('Login failed')) {
-            console.error('  El servidor responde pero rechaza el usuario o la contraseña.');
-            console.error('  Verificar DB_USER y DB_PASSWORD, y que el login esté habilitado.');
+            console.error('  El servidor responde pero rechaza la conexion. Hay DOS causas');
+            console.error('  posibles, y SQL Server informa lo mismo en los dos casos:');
+            console.error('');
+            console.error('    1. El usuario o la contrasena no son correctos.');
+            console.error('    2. El nombre de la base no existe, o el usuario no tiene');
+            console.error('       permiso sobre ella.');
+            console.error('');
+            if (!basePredeterminada) {
+                console.error(`  Se esta pidiendo la base "${nombreBase}". Si no estas seguro`);
+                console.error('  de ese nombre, DEJALO VACIO: se usa la base predeterminada');
+                console.error('  del usuario, que es lo mismo que elegir "<predeterminado>"');
+                console.error('  en SQL Server Management Studio.');
+            } else {
+                console.error('  La base quedo en la predeterminada, asi que lo mas probable');
+                console.error('  es que el usuario o la contrasena no sean correctos.');
+            }
         } else if (m.includes('ETIMEOUT') || m.includes('timeout')) {
             console.error('  El nombre resuelve pero no hay respuesta en el puerto 1433.');
             console.error('  Puede ser el firewall, o que SQL Server no acepte TCP/IP.');
@@ -204,7 +230,7 @@ async function main() {
                 .input('v', sql.VarChar, vista)
                 .query(`
                     SELECT COLUMN_NAME, DATA_TYPE
-                    FROM INFORMATION_SCHEMA.COLUMNS
+                    FROM PROGRAM.INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_NAME = @v
                     ORDER BY ORDINAL_POSITION
                 `);
@@ -242,7 +268,7 @@ async function main() {
 
         const cand = await pool.request().query(`
             SELECT COLUMN_NAME, DATA_TYPE
-            FROM INFORMATION_SCHEMA.COLUMNS
+            FROM PROGRAM.INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_NAME = 'VI_CPAR_PROPIETARIOS'
               AND (COLUMN_NAME LIKE '%RENTA%' OR COLUMN_NAME LIKE '%PADRON%' OR COLUMN_NAME LIKE '%CUENTA%')
             ORDER BY COLUMN_NAME

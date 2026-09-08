@@ -123,9 +123,9 @@ $tabla.Margin       = New-Object System.Windows.Forms.Padding(16, 0, 16, 0)
 [void]$tabla.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::AutoSize)))
 [void]$tabla.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::AutoSize)))
 
-function Agregar-Campo($etiqueta, $valor, $esClave) {
+function Agregar-Campo($etiqueta, $valor, $esClave, $opcional) {
     $lbl          = New-Object System.Windows.Forms.Label
-    $lbl.Text     = $etiqueta
+    $lbl.Text     = if ($opcional) { "$etiqueta (opcional)" } else { $etiqueta }
     $lbl.AutoSize = $true
     $lbl.Anchor   = "Left"
     $lbl.Margin   = New-Object System.Windows.Forms.Padding(3, 8, 12, 8)
@@ -141,7 +141,7 @@ function Agregar-Campo($etiqueta, $valor, $esClave) {
 }
 
 $txtServidor = Agregar-Campo "Nombre del servidor"  $actual.DB_SERVER   $false
-$txtBase     = Agregar-Campo "Nombre de la base"    $actual.DB_DATABASE $false
+$txtBase     = Agregar-Campo "Nombre de la base"    $actual.DB_DATABASE $false $true
 $txtUsuario  = Agregar-Campo "Nombre de usuario"    $actual.DB_USER     $false
 $txtClave    = Agregar-Campo "Contrasena"           $actual.DB_PASSWORD $true
 
@@ -149,9 +149,10 @@ $pila.Controls.Add($tabla)
 
 # --- Ayuda y estado ----------------------------------------------------------
 $ayuda           = New-Object System.Windows.Forms.Label
-$ayuda.Text      = "El servidor se puede indicar por su nombre de equipo o por su direccion IP."
+$ayuda.Text      = "El servidor puede ser el nombre del equipo o su direccion IP." + [Environment]::NewLine + "Si no sabes el nombre de la base, dejala VACIA: se usa la predeterminada."
 $ayuda.ForeColor = [System.Drawing.Color]::Gray
 $ayuda.AutoSize  = $true
+$ayuda.MaximumSize = New-Object System.Drawing.Size(430, 0)
 $ayuda.Margin    = New-Object System.Windows.Forms.Padding(19, 6, 16, 0)
 $pila.Controls.Add($ayuda)
 
@@ -172,9 +173,14 @@ function Guardar-Configuracion {
     if (Test-Path $plantilla)   { $lineas = Get-Content $plantilla -Encoding UTF8 }
     elseif (Test-Path $rutaEnv) { $lineas = Get-Content $rutaEnv -Encoding UTF8 }
 
+    # "<predeterminado>" es lo que muestra SSMS, no un nombre de base. Si alguien
+    # lo copia tal cual, se guarda vacio, que es lo que realmente significa.
+    $baseEscrita = $txtBase.Text.Trim()
+    if ($baseEscrita -eq "<predeterminado>" -or $baseEscrita -eq "predeterminado") { $baseEscrita = "" }
+
     $nuevos = @{
         "DB_SERVER"   = $txtServidor.Text.Trim()
-        "DB_DATABASE" = $txtBase.Text.Trim()
+        "DB_DATABASE" = $baseEscrita
         "DB_USER"     = $txtUsuario.Text.Trim()
         "DB_PASSWORD" = $txtClave.Text
     }
@@ -206,10 +212,16 @@ function Guardar-Configuracion {
 }
 
 function Campos-Completos {
-    if ($txtServidor.Text.Trim() -eq "" -or $txtBase.Text.Trim() -eq "" -or
+    # El nombre de la base NO es obligatorio: vacio significa usar la
+    # predeterminada del usuario, igual que "<predeterminado>" en SQL Server
+    # Management Studio. Exigirlo llevaba a escribir ahi la palabra
+    # "<predeterminado>" como si fuera un nombre, y entonces SQL Server rechaza
+    # la conexion con "Login failed", que hace pensar que el problema es la
+    # contrasena.
+    if ($txtServidor.Text.Trim() -eq "" -or
         $txtUsuario.Text.Trim()  -eq "" -or $txtClave.Text -eq "") {
         [void][System.Windows.Forms.MessageBox]::Show(
-            "Hay que completar los cuatro campos.", "Faltan datos",
+            "Hay que completar el servidor, el usuario y la contrasena.", "Faltan datos",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Warning)
         return $false

@@ -42,11 +42,30 @@ const PORT = process.env.PORT || 8000;
 // ============================================================================
 // IMPORTANTE: crear un archivo .env (ver .env.example) con estos valores
 // y agregar .env al .gitignore. Nunca commitear credenciales reales.
+/**
+ * Nombre de la base, o vacio para usar la predeterminada del usuario.
+ *
+ * En SQL Server Management Studio este campo se puede dejar en
+ * "<predeterminado>", que significa "la base por defecto de este login". Muchos
+ * se conectan asi y nunca escriben el nombre.
+ *
+ * Si se manda un nombre de base que no existe, SQL Server NO dice que la base
+ * no existe: responde "Login failed for user", el mismo error que da una
+ * contrasena equivocada. Es de los errores mas dificiles de diagnosticar.
+ *
+ * Las consultas del visor nombran la base completa (PROGRAM.dbo.VI_...), asi
+ * que funcionan igual sin especificarla en la conexion.
+ */
+const nombreBase = String(process.env.DB_DATABASE || '').trim();
+const baseEsPredeterminada = nombreBase === '' ||
+                             nombreBase.toLowerCase() === '<predeterminado>' ||
+                             nombreBase.toLowerCase() === 'predeterminado';
+
 const dbConfig = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     server: process.env.DB_SERVER,
-    database: process.env.DB_DATABASE,
+    ...(baseEsPredeterminada ? {} : { database: nombreBase }),
     requestTimeout: 120000,
     options: {
         // TODO (roadmap seguridad): habilitar cifrado en tránsito cuando el
@@ -246,7 +265,8 @@ let pool = null;
  * una línea en un archivo. El servidor arranca igual en modo degradado.
  */
 function revisarConfiguracion() {
-    const requeridas = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER', 'DB_DATABASE'];
+    // DB_DATABASE no esta: es opcional, igual que en SSMS (ver nombreBase).
+    const requeridas = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER'];
     const faltantes = requeridas.filter((v) => !process.env[v]);
 
     if (faltantes.length > 0) {

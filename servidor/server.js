@@ -385,6 +385,13 @@ app.use(helmet({
 const DIR_WEB = path.join(__dirname, '..', 'web');
 
 app.use(express.static(DIR_WEB, {
+    // index: false para que este middleware NO responda por su cuenta con
+    // index.html cuando se pide "/". De eso se encarga la ruta de más abajo,
+    // que además le pone a app.js y app.css un número de versión sacado de su
+    // fecha de modificación. Sin esto, esa ruta nunca se ejecuta y una
+    // computadora puede quedarse usando la versión vieja del programa después
+    // de actualizar, sin que nadie lo note.
+    index: false,
     maxAge: '1d',
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.json')) {
@@ -692,70 +699,117 @@ app.get('/api/filtrar', async (req, res) => {
     }
 
     try {
+        const inicio = Date.now();
         const request = activePool.request();
         const condiciones = ['p.ACTIVO = 1'];
 
-        // Cada criterio agrega su condición Y su parámetro. Los valores nunca
-        // se concatenan al SQL: van siempre como parámetros, así que no hay
-        // forma de inyectar nada desde la query string.
+        // --------------------------------------------------------------------
+        // POR QUE SIN TRY_CAST
+        //   SUP_TER y MET_FRENTE son columnas 'money', o sea que ya son
+        //   numericas. El TRY_CAST que habia obligaba a SQL Server a convertir
+        //   las 19.950 filas antes de poder comparar, y una columna envuelta en
+        //   una funcion no puede usar indices: cada busqueda recorria la tabla
+        //   entera. Comparando directo, el motor puede aprovechar los indices
+        //   que existan.
+        //
+        //   Las filas con superficie nula quedan afuera igual, porque en SQL
+        //   una comparacion contra NULL nunca es verdadera.
+        // --------------------------------------------------------------------
         if (!isNaN(criterios.supMin)) {
             request.input('supMin', sql.Float, criterios.supMin);
-            condiciones.push('TRY_CAST(p.SUP_TER AS FLOAT) >= @supMin');
+            condiciones.push('p.SUP_TER >= @supMin');
         }
         if (!isNaN(criterios.supMax)) {
             request.input('supMax', sql.Float, criterios.supMax);
-            condiciones.push('TRY_CAST(p.SUP_TER AS FLOAT) <= @supMax');
+            condiciones.push('p.SUP_TER <= @supMax');
         }
         if (!isNaN(criterios.frenteMin)) {
             request.input('frenteMin', sql.Float, criterios.frenteMin);
-            condiciones.push('TRY_CAST(p.MET_FRENTE AS FLOAT) >= @frenteMin');
+            condiciones.push('p.MET_FRENTE >= @frenteMin');
         }
         if (!isNaN(criterios.frenteMax)) {
             request.input('frenteMax', sql.Float, criterios.frenteMax);
-            condiciones.push('TRY_CAST(p.MET_FRENTE AS FLOAT) <= @frenteMax');
+            condiciones.push('p.MET_FRENTE <= @frenteMax');
         }
+
+        // Los valores de estos dos vienen de listas cerradas (los botones de
+        // estado y el desplegable de barrios), asi que se comparan por
+        // igualdad y no con LIKE '%...%'. Un LIKE que empieza con comodin
+        // obliga a leer todas las filas.
         if (criterios.edificacion) {
             request.input('edificacion', sql.VarChar, criterios.edificacion);
-            condiciones.push("UPPER(LTRIM(RTRIM(p.BAL_EDIF))) LIKE '%' + UPPER(@edificacion) + '%'");
+            condiciones.push("UPPER(LTRIM(RTRIM(p.BAL_EDIF))) = UPPER(@edificacion)");
         }
         if (criterios.barrio) {
             request.input('barrio', sql.VarChar, criterios.barrio);
-            condiciones.push("UPPER(LTRIM(RTRIM(p.BARRIO))) LIKE '%' + UPPER(@barrio) + '%'");
-        }
-        if (criterios.zonificacion) {
-            request.input('zonificacion', sql.VarChar, criterios.zonificacion);
-            condiciones.push("UPPER(LTRIM(RTRIM(f.CONCEPTO))) LIKE '%' + UPPER(@zonificacion) + '%'");
+            condiciones.push("UPPER(LTRIM(RTRIM(p.BARRIO))) = UPPER(@barrio)");
         }
 
         request.input('maxRows', sql.Int, MAX_ROWS);
 
-        // La zonificación vive en otra vista. Se trae con OUTER APPLY TOP 1 en
-        // lugar de un LEFT JOIN: una parcela puede tener varios frentes, y con
-        // JOIN aparecería repetida una vez por cada uno.
-        // ACÁ es donde la superficie, el frente, el estado y el barrio salen
-        // de la base. Mientras no haya conexión los devuelve filtrarDePrueba()
-        // con valores inventados; esta consulta es la definitiva y no hay que
-        // cambiarla cuando la conexión exista.
+        // --------------------------------------------------------------------
+        // LA ZONIFICACION SE BUSCA APARTE
+        //
+        //   Vive en otra vista (VI_CPAR_FRENTES) y una parcela puede tener
+        //   varios frentes. Antes se traia con un OUTER APPLY dentro de la
+        //   consulta principal, y eso lo hacia ejecutarse una vez por CADA
+        //   parcela evaluada -las 19.950- aunque despues se devolvieran veinte.
+        //
+        //   Ahora primero se filtra y se recorta con el TOP, y recien sobre ese
+        //   puñado de filas se busca la zonificacion. El trabajo pasa de miles
+        //   de subconsultas a unas pocas.
+        //
+        //   La excepcion es cuando se filtra POR zonificacion: ahi si hay que
+        //   mirarla antes de decidir que parcelas entran, y se usa un EXISTS,
+        //   que corta apenas encuentra una coincidencia.
+        // --------------------------------------------------------------------
+        if (criterios.zonificacion) {
+            request.input('zonificacion', sql.VarChar, criterios.zonificacion);
+            condiciones.push(`EXISTS (
+                SELECT 1 FROM PROGRAM.dbo.VI_CPAR_FRENTES z
+                WHERE LTRIM(RTRIM(z.NRO_RENTAS)) = LTRIM(RTRIM(p.NRO_RENTA))
+                  AND UPPER(LTRIM(RTRIM(z.CONCEPTO))) = UPPER(@zonificacion)
+            )`);
+        }
+
         const consulta = `
-            SELECT DISTINCT TOP (@maxRows)
-                LTRIM(RTRIM(p.NRO_RENTA)) AS PADRON,
-                LTRIM(RTRIM(p.NOMENCLA))  AS NOMENCLA,
-                p.SUP_TER,
-                p.MET_FRENTE,
-                LTRIM(RTRIM(p.BAL_EDIF))  AS BAL_EDIF,
-                LTRIM(RTRIM(p.BARRIO))    AS BARRIO,
-                LTRIM(RTRIM(f.CONCEPTO))  AS ZONIFICACION
-            FROM PROGRAM.dbo.VI_GIS_CATASTRO_PADRON p
+            SELECT
+                sel.PADRON,
+                sel.NOMENCLA,
+                sel.SUP_TER,
+                sel.MET_FRENTE,
+                sel.BAL_EDIF,
+                sel.BARRIO,
+                LTRIM(RTRIM(f.CONCEPTO)) AS ZONIFICACION
+            FROM (
+                SELECT DISTINCT TOP (@maxRows)
+                    LTRIM(RTRIM(p.NRO_RENTA)) AS PADRON,
+                    LTRIM(RTRIM(p.NOMENCLA))  AS NOMENCLA,
+                    p.SUP_TER,
+                    p.MET_FRENTE,
+                    LTRIM(RTRIM(p.BAL_EDIF))  AS BAL_EDIF,
+                    LTRIM(RTRIM(p.BARRIO))    AS BARRIO
+                FROM PROGRAM.dbo.VI_GIS_CATASTRO_PADRON p
+                WHERE ${condiciones.join(' AND ')}
+                ORDER BY LTRIM(RTRIM(p.NRO_RENTA))
+            ) sel
             OUTER APPLY (
                 SELECT TOP 1 CONCEPTO
                 FROM PROGRAM.dbo.VI_CPAR_FRENTES
-                WHERE LTRIM(RTRIM(NRO_RENTAS)) = LTRIM(RTRIM(p.NRO_RENTA))
+                WHERE LTRIM(RTRIM(NRO_RENTAS)) = sel.PADRON
             ) f
-            WHERE ${condiciones.join(' AND ')}
-            ORDER BY LTRIM(RTRIM(p.NRO_RENTA))
+            ORDER BY sel.PADRON
         `;
 
         const resultado = await request.query(consulta);
+        const ms = Date.now() - inicio;
+
+        // Queda registrado cuanto tardo: si alguna busqueda se vuelve lenta en
+        // la Municipalidad, el numero esta en la consola del servidor y no hay
+        // que adivinar.
+        console.log(`🔎 Filtro: ${resultado.recordset.length} parcelas en ${ms} ms` +
+                    (ms > 3000 ? '  ⚠️ LENTO' : ''));
+
         res.json(resultado.recordset);
 
     } catch (err) {
@@ -829,7 +883,45 @@ app.get('/api/opciones', async (req, res) => {
 // ============================================================================
 app.get('/', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
-    res.sendFile(path.join(DIR_WEB, 'index.html'));
+
+    // ------------------------------------------------------------------
+    // VERSION AUTOMATICA DE LOS ARCHIVOS DE LA APLICACION
+    //
+    // El HTML pide app.js y app.css con un ?v=N. Ese numero venia escrito a
+    // mano, y bastaba olvidarse de subirlo -o que el navegador tuviera
+    // guardado el HTML viejo- para que una computadora siguiera usando la
+    // version anterior del programa despues de actualizar. Es dificil de
+    // notar: el visor abre igual, pero se comporta como la version vieja.
+    //
+    // Ahora el numero sale de la fecha de modificacion de cada archivo.
+    // Cambia solo cuando el archivo cambia: despues de una actualizacion el
+    // navegador vuelve a pedirlos, y mientras no haya cambios los sigue
+    // tomando de su cache.
+    // ------------------------------------------------------------------
+    const fs = require('fs');
+    const rutaHtml = path.join(DIR_WEB, 'index.html');
+
+    const version = (relativa) => {
+        try {
+            return String(Math.floor(fs.statSync(path.join(DIR_WEB, relativa)).mtimeMs));
+        } catch (err) {
+            return String(Date.now());
+        }
+    };
+
+    try {
+        const html = fs.readFileSync(rutaHtml, 'utf8')
+            .replace(/(css\/app\.css)\?v=[^"']*/g, `$1?v=${version('css/app.css')}`)
+            .replace(/(js\/config\.js)\?v=[^"']*/g, `$1?v=${version('js/config.js')}`)
+            .replace(/(js\/app\.js)\?v=[^"']*/g,    `$1?v=${version('js/app.js')}`);
+
+        res.type('html').send(html);
+    } catch (err) {
+        // Si algo falla, se entrega el archivo tal cual: es preferible el
+        // visor con una version vieja antes que un visor que no abre.
+        console.error('No se pudo versionar el HTML:', err.message);
+        res.sendFile(rutaHtml);
+    }
 });
 
 // ============================================================================

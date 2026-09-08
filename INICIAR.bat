@@ -44,6 +44,44 @@ if not exist "servidor\.env" (
     exit /b 1
 )
 
+REM ============================================================================
+REM  ¿HAY OTRO VISOR YA CORRIENDO EN EL PUERTO 8000?
+REM ----------------------------------------------------------------------------
+REM  Esto es lo que hacia que "siga apareciendo el programa viejo" despues de
+REM  actualizar: si quedo un visor abierto desde OTRA carpeta -una copia
+REM  anterior-, ese sigue ocupando el puerto 8000. El visor nuevo no puede
+REM  levantar, se cierra, y el navegador muestra el viejo, que sigue activo.
+REM
+REM  Desde afuera parece que la actualizacion no sirvio. En realidad nunca
+REM  llego a ejecutarse.
+REM
+REM  Aca se detecta ese proceso y se cierra antes de arrancar.
+REM ============================================================================
+set "OCUPADO="
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":8000 .*LISTENING"') do set "OCUPADO=%%p"
+
+if defined OCUPADO (
+    echo.
+    echo  Hay otro visor abierto ocupando el puerto 8000.
+    echo  Es una ventana anterior, posiblemente de otra carpeta.
+    echo.
+    echo  Se cierra para poder abrir este.
+    echo.
+    taskkill /F /PID %OCUPADO% >nul 2>nul
+    if errorlevel 1 (
+        echo  No se pudo cerrar automaticamente.
+        echo.
+        echo  Cerrar a mano todas las ventanas negras del visor que esten
+        echo  abiertas y volver a ejecutar este archivo.
+        echo.
+        pause
+        exit /b 1
+    )
+    echo  Cerrado. Continuando...
+    %SystemRoot%\System32\timeout.exe /t 2 /nobreak >nul
+    echo.
+)
+
 echo  Iniciando el visor...
 echo.
 

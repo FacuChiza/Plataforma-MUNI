@@ -142,10 +142,13 @@ se guardó desde `CONFIGURAR.bat`, ya queda en `false`.
 
 Así, si algo falla, se nota, en lugar de quedar tapado por datos falsos.
 
-### "Dice que el puerto 8000 está ocupado"
+### "Dice que no encontró ningún puerto libre"
 
-El visor ya está abierto en otra ventana. Buscarla en la barra de tareas, o
-cerrar todas las ventanas negras y volver a empezar.
+Pasa solo si hay muchos programas usando la red. Cerrar alguno y volver a
+intentar, o reiniciar la computadora.
+
+No hace falta cerrar el visor anterior: este busca su propio puerto y los dos
+pueden convivir.
 
 ### "El navegador no se abre solo"
 
@@ -192,12 +195,18 @@ equipo no la tiene, hay que hacerlo a mano desde otra máquina:
 ## Convive con el visor anterior
 
 Este visor **no reemplaza ni toca** al que ya estaba funcionando. Usan puertos
-distintos, así que pueden estar abiertos al mismo tiempo:
+distintos, así que pueden estar abiertos al mismo tiempo.
 
-| | |
-|---|---|
-| `http://localhost:8000` | visor anterior |
-| `http://localhost:8001` | este |
+El visor anterior usa el **8000**. Este busca uno libre al arrancar —8001, 8002,
+8003…— y **nunca prueba el 8000**. Cuál le tocó lo dice al abrir:
+
+```
+Puerto: 8001
+```
+
+y también en la línea `Si no se abre, entrar a: http://localhost:8001`. Si en
+esa computadora el 8001 ya está ocupado por otro programa, toma el siguiente
+libre y sigue funcionando igual.
 
 Eso es a propósito. Mientras este visor se esté probando, **el anterior tiene
 que seguir disponible**: si algo acá no funciona, en la Municipalidad se sigue
@@ -207,8 +216,8 @@ Por eso:
 
 - **No borrar la instalación anterior** hasta que esté confirmado, después de un
   tiempo de uso real, que este visor hace todo lo que hacía aquel.
-- `INICIAR.bat` **no cierra ningún otro visor**. Si su puerto está ocupado, lo
-  dice y se detiene, en vez de cerrar algo que puede estar en uso.
+- `INICIAR.bat` **no cierra ningún otro programa**. Si el puerto que iba a usar
+  está ocupado, busca otro en vez de reclamarlo.
 - Ninguna de las herramientas de este programa modifica la instalación anterior.
 
 ### Volver atrás

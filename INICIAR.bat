@@ -45,41 +45,44 @@ if not exist "servidor\.env" (
 )
 
 REM ============================================================================
-REM  PUERTO DE ESTE VISOR
+REM  PUERTO: SE BUSCA UNO LIBRE
 REM ----------------------------------------------------------------------------
-REM  Se lee del archivo de configuracion. Por defecto es el 8001, y NO el 8000,
-REM  porque el 8000 lo usa el visor anterior.
+REM  No se usa un puerto fijo. El 8000 lo ocupa el visor anterior, y cualquier
+REM  otro numero elegido de antemano puede estar tomado por otro programa de
+REM  esta computadora. En vez de fallar, se prueban varios y se usa el primero
+REM  que este libre.
 REM
-REM  Los dos pueden estar abiertos a la vez sin molestarse. Eso es a proposito:
-REM  mientras este visor se este probando, el anterior tiene que seguir
-REM  disponible y funcionando. Si algo aca no anda, en la Municipalidad siguen
-REM  trabajando con el de siempre, sin depender de que esto funcione.
+REM  El 8000 no se prueba nunca: es el del visor anterior y no hay que
+REM  molestarlo. Este visor no cierra ni ocupa nada que ya este en uso; los dos
+REM  tienen que poder funcionar al mismo tiempo, para que si algo aca falla en
+REM  la Municipalidad sigan trabajando con el de siempre.
 REM
-REM  Por el mismo motivo, este archivo NO cierra ningun otro visor: solo avisa
-REM  si su propio puerto esta ocupado.
+REM  El numero elegido se le pasa al servidor por variable de entorno, asi el
+REM  navegador se abre en el puerto correcto sin configurar nada a mano.
 REM ============================================================================
-set "PUERTO=8001"
-for /f "usebackq tokens=1,* delims==" %%a in ("servidor\.env") do (
-    if /i "%%a"=="PORT" set "PUERTO=%%b"
+setlocal enabledelayedexpansion
+
+set "PUERTO="
+for %%p in (8001 8002 8003 8010 8020 8080 8090 3000 3001 5000) do (
+    if not defined PUERTO (
+        netstat -ano | findstr /r /c:":%%p .*LISTENING" >nul 2>nul
+        if errorlevel 1 set "PUERTO=%%p"
+    )
 )
-set "PUERTO=%PUERTO: =%"
 
-set "OCUPADO="
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":%PUERTO% .*LISTENING"') do set "OCUPADO=%%p"
-
-if defined OCUPADO (
+if not defined PUERTO (
     echo.
-    echo  El puerto %PUERTO% ya esta en uso.
+    echo  No se encontro ningun puerto libre para abrir el visor.
     echo.
-    echo  Lo mas probable es que este visor ya este abierto en otra ventana.
-    echo  Buscala en la barra de tareas, o cerrala y volve a intentar.
-    echo.
-    echo  NO se cierra nada automaticamente para no interrumpir algo que
-    echo  pueda estar en uso.
+    echo  Cerrar algun programa que este usando la red y volver a intentar,
+    echo  o reiniciar la computadora.
     echo.
     pause
     exit /b 1
 )
+
+echo  Puerto: !PUERTO!
+set "PORT=!PUERTO!"
 
 echo  Iniciando el visor...
 echo.
@@ -91,11 +94,11 @@ REM
 REM  timeout.exe va con la ruta completa a proposito: si la computadora tiene
 REM  Git instalado, el PATH puede tener otro programa llamado igual que no
 REM  entiende estos parametros, y el navegador no se abriria solo.
-start "" /b cmd /c "%SystemRoot%\System32\timeout.exe /t 4 /nobreak >nul & start http://localhost:%PUERTO%"
+start "" /b cmd /c "%SystemRoot%\System32\timeout.exe /t 4 /nobreak >nul & start http://localhost:!PUERTO!"
 
 echo  ------------------------------------------------------------
 echo   El visor se abre solo en el navegador.
-echo   Si no se abre, entrar a:  http://localhost:%PUERTO%
+echo   Si no se abre, entrar a:  http://localhost:!PUERTO!
 echo.
 echo   DEJAR ESTA VENTANA ABIERTA mientras se use el visor.
 echo   Para cerrarlo: cerrar esta ventana.
@@ -111,8 +114,7 @@ echo  ============================================================
 echo   El visor se detuvo.
 echo.
 echo   Si fue un error, el motivo figura arriba. El mas comun es
-echo   que el puerto 8000 ya este ocupado por otro programa, o que
-echo   el visor ya este abierto en otra ventana.
+echo   que este visor ya este abierto en otra ventana.
 echo  ============================================================
 echo.
 pause

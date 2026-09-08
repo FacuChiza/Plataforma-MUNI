@@ -45,41 +45,40 @@ if not exist "servidor\.env" (
 )
 
 REM ============================================================================
-REM  ¿HAY OTRO VISOR YA CORRIENDO EN EL PUERTO 8000?
+REM  PUERTO DE ESTE VISOR
 REM ----------------------------------------------------------------------------
-REM  Esto es lo que hacia que "siga apareciendo el programa viejo" despues de
-REM  actualizar: si quedo un visor abierto desde OTRA carpeta -una copia
-REM  anterior-, ese sigue ocupando el puerto 8000. El visor nuevo no puede
-REM  levantar, se cierra, y el navegador muestra el viejo, que sigue activo.
+REM  Se lee del archivo de configuracion. Por defecto es el 8001, y NO el 8000,
+REM  porque el 8000 lo usa el visor anterior.
 REM
-REM  Desde afuera parece que la actualizacion no sirvio. En realidad nunca
-REM  llego a ejecutarse.
+REM  Los dos pueden estar abiertos a la vez sin molestarse. Eso es a proposito:
+REM  mientras este visor se este probando, el anterior tiene que seguir
+REM  disponible y funcionando. Si algo aca no anda, en la Municipalidad siguen
+REM  trabajando con el de siempre, sin depender de que esto funcione.
 REM
-REM  Aca se detecta ese proceso y se cierra antes de arrancar.
+REM  Por el mismo motivo, este archivo NO cierra ningun otro visor: solo avisa
+REM  si su propio puerto esta ocupado.
 REM ============================================================================
+set "PUERTO=8001"
+for /f "usebackq tokens=1,* delims==" %%a in ("servidor\.env") do (
+    if /i "%%a"=="PORT" set "PUERTO=%%b"
+)
+set "PUERTO=%PUERTO: =%"
+
 set "OCUPADO="
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":8000 .*LISTENING"') do set "OCUPADO=%%p"
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":%PUERTO% .*LISTENING"') do set "OCUPADO=%%p"
 
 if defined OCUPADO (
     echo.
-    echo  Hay otro visor abierto ocupando el puerto 8000.
-    echo  Es una ventana anterior, posiblemente de otra carpeta.
+    echo  El puerto %PUERTO% ya esta en uso.
     echo.
-    echo  Se cierra para poder abrir este.
+    echo  Lo mas probable es que este visor ya este abierto en otra ventana.
+    echo  Buscala en la barra de tareas, o cerrala y volve a intentar.
     echo.
-    taskkill /F /PID %OCUPADO% >nul 2>nul
-    if errorlevel 1 (
-        echo  No se pudo cerrar automaticamente.
-        echo.
-        echo  Cerrar a mano todas las ventanas negras del visor que esten
-        echo  abiertas y volver a ejecutar este archivo.
-        echo.
-        pause
-        exit /b 1
-    )
-    echo  Cerrado. Continuando...
-    %SystemRoot%\System32\timeout.exe /t 2 /nobreak >nul
+    echo  NO se cierra nada automaticamente para no interrumpir algo que
+    echo  pueda estar en uso.
     echo.
+    pause
+    exit /b 1
 )
 
 echo  Iniciando el visor...
@@ -92,11 +91,11 @@ REM
 REM  timeout.exe va con la ruta completa a proposito: si la computadora tiene
 REM  Git instalado, el PATH puede tener otro programa llamado igual que no
 REM  entiende estos parametros, y el navegador no se abriria solo.
-start "" /b cmd /c "%SystemRoot%\System32\timeout.exe /t 4 /nobreak >nul & start http://localhost:8000"
+start "" /b cmd /c "%SystemRoot%\System32\timeout.exe /t 4 /nobreak >nul & start http://localhost:%PUERTO%"
 
 echo  ------------------------------------------------------------
 echo   El visor se abre solo en el navegador.
-echo   Si no se abre, entrar a:  http://localhost:8000
+echo   Si no se abre, entrar a:  http://localhost:%PUERTO%
 echo.
 echo   DEJAR ESTA VENTANA ABIERTA mientras se use el visor.
 echo   Para cerrarlo: cerrar esta ventana.

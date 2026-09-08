@@ -164,17 +164,24 @@ Write-Host "   Carpeta: $Destino"
 Write-Host "   Para usar el visor: el acceso directo del escritorio."
 Write-Host ""
 
+Write-Host "   Este visor usa el puerto 8001. El visor anterior usa el 8000,"
+Write-Host "   asi que los dos pueden estar abiertos a la vez sin molestarse:"
+Write-Host ""
+Write-Host "     http://localhost:8000   visor anterior"
+Write-Host "     http://localhost:8001   este"
+Write-Host ""
+
 if ($otras.Count -gt 0) {
-    Write-Host "   ATENCION: quedaron $($otras.Count) copia(s) vieja(s) del programa."
-    Write-Host "   Conviene BORRARLAS para no volver a abrir la equivocada:"
+    Write-Host "   Hay $($otras.Count) instalacion(es) mas en esta computadora:"
     Write-Host ""
     foreach ($o in $otras) { Write-Host "     $o" }
     Write-Host ""
-    Write-Host "   (Antes de borrar, verificar que ninguna tenga algo que"
-    Write-Host "    haga falta. La configuracion de la base ya esta en la"
-    Write-Host "    carpeta nueva.)"
-} else {
-    Write-Host "   No quedaron otras copias del programa."
+    Write-Host "   NO BORRARLAS TODAVIA. Mientras este visor se este probando, el"
+    Write-Host "   anterior tiene que seguir disponible: si algo aca no funciona,"
+    Write-Host "   se sigue trabajando con el de siempre."
+    Write-Host ""
+    Write-Host "   Recien cuando este confirmado que este anda bien, y despues de"
+    Write-Host "   un tiempo de uso, tiene sentido ordenar las carpetas."
 }
 Write-Host ""
 Write-Host "  ============================================================"

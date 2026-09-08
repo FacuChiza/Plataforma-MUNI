@@ -189,12 +189,44 @@ equipo no la tiene, hay que hacerlo a mano desde otra máquina:
 
 ---
 
+## Convive con el visor anterior
+
+Este visor **no reemplaza ni toca** al que ya estaba funcionando. Usan puertos
+distintos, así que pueden estar abiertos al mismo tiempo:
+
+| | |
+|---|---|
+| `http://localhost:8000` | visor anterior |
+| `http://localhost:8001` | este |
+
+Eso es a propósito. Mientras este visor se esté probando, **el anterior tiene
+que seguir disponible**: si algo acá no funciona, en la Municipalidad se sigue
+trabajando con el de siempre sin depender de que esto ande.
+
+Por eso:
+
+- **No borrar la instalación anterior** hasta que esté confirmado, después de un
+  tiempo de uso real, que este visor hace todo lo que hacía aquel.
+- `INICIAR.bat` **no cierra ningún otro visor**. Si su puerto está ocupado, lo
+  dice y se detiene, en vez de cerrar algo que puede estar en uso.
+- Ninguna de las herramientas de este programa modifica la instalación anterior.
+
+### Volver atrás
+
+No hace falta desinstalar nada: abrir el visor anterior como siempre. Los dos
+consultan la misma base de datos, en modo lectura, así que usar uno u otro no
+cambia ningún dato.
+
+---
+
 ## Qué NO hace este visor
 
 Conviene que quede claro para no esperar de él algo que no hace:
 
 - **No modifica nada.** Solo lee. No puede cambiar, borrar ni cargar datos en
   el sistema de catastro.
+- **No toca el visor anterior.** Ni sus archivos, ni su configuración, ni lo
+  cierra mientras está en uso.
 - **No funciona fuera de la red municipal.** El mapa se ve, los datos no.
 - **No reemplaza al sistema de catastro.** Es una forma de consultarlo sobre el
   mapa.

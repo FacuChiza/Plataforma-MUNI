@@ -115,15 +115,19 @@ if ($copias.Count -eq 1) {
     Write-Host ""
     Write-Host "   2. Actualizarla: abrir esa carpeta y ejecutar ACTUALIZAR.bat"
     Write-Host ""
-    Write-Host "   3. BORRAR las demas, para no volver a confundirse:"
+    Write-Host "   3. Las demas:"
     foreach ($c in $copias[1..($copias.Count-1)]) {
-        $aviso = if ($c.Env) { "   <-- OJO: tiene configuracion propia" } else { "" }
+        $aviso = if ($c.Env) { "   <-- tiene configuracion propia" } else { "" }
         Write-Host "      $($c.Ruta)$aviso"
     }
     Write-Host ""
-    Write-Host "   Si alguna de las que hay que borrar tiene configuracion propia"
-    Write-Host "   y la que se conserva no, copiar primero su archivo"
-    Write-Host "   servidor\.env a la carpeta que se conserva."
+    Write-Host "   NO BORRAR el visor anterior mientras el nuevo se este probando."
+    Write-Host "   Es la unica forma de volver atras si algo no funciona: hasta que"
+    Write-Host "   este confirmado que el nuevo anda, en la Municipalidad tienen que"
+    Write-Host "   poder seguir trabajando con el de siempre."
+    Write-Host ""
+    Write-Host "   Los dos pueden convivir: usan puertos distintos (8000 el anterior,"
+    Write-Host "   8001 el nuevo), asi que no se molestan entre si."
 }
 
 Write-Host ""

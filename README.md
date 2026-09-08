@@ -33,6 +33,12 @@ que no se notan —se descomprime en otra carpeta, o Windows omite archivos al
 reemplazar— y la computadora queda ejecutando la versión anterior sin que nadie
 se dé cuenta.
 
+`DIAGNOSTICO.bat` genera un informe con el estado real de la instalación:
+versión, carpeta desde la que se ejecuta, si quedaron copias viejas del programa
+en la computadora, qué contienen los archivos y si los servidores de mapas
+responden desde esa red. **Cuando algo "sigue sin andar" después de actualizar,
+correr esto primero.**
+
 ### Saber qué versión está corriendo
 
 La versión figura **abajo a la derecha del mapa**, al lado del sistema de
@@ -122,6 +128,7 @@ INSTALAR.bat             instalación en un doble clic (una sola vez)
 INICIAR.bat              arranca el visor y lo abre en el navegador
 CONFIGURAR.bat           cambia los datos de conexión a la base
 ACTUALIZAR.bat           baja la última versión conservando la configuración
+DIAGNOSTICO.bat          informe del estado real de la instalación
 VERSION.txt              versión del programa
 
 web/                     frontend — es lo que se publica

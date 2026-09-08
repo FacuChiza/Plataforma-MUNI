@@ -21,12 +21,67 @@
         // ====================================================================
         const ATRIB_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
-        const osm = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            maxZoom: 22,
-            maxNativeZoom: 19,
-            subdomains: 'abcd',
-            attribution: ATRIB_OSM + ' &copy; <a href="https://carto.com/attributions">CARTO</a>'
-        });
+        // --------------------------------------------------------------------
+        // MAPA DE CALLES CON RESPALDO AUTOMATICO
+        //
+        // Un solo proveedor es un punto unico de falla: si esa red bloquea ese
+        // dominio -o el proveedor bloquea a esa red, como hizo OpenStreetMap-,
+        // el mapa queda cubierto de carteles de error y no hay nada que el
+        // usuario pueda hacer.
+        //
+        // Ahora hay una lista. Si el proveedor activo falla al traer las
+        // imagenes, el visor pasa solo al siguiente y lo deja anotado en la
+        // consola. Con que uno de los tres responda, el mapa se ve.
+        // --------------------------------------------------------------------
+        const PROVEEDORES_CALLE = [
+            {
+                nombre: 'CARTO',
+                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                opciones: { subdomains: 'abcd', attribution: ATRIB_OSM + ' &copy; <a href="https://carto.com/attributions">CARTO</a>' }
+            },
+            {
+                nombre: 'Esri',
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                opciones: { attribution: 'Esri' }
+            },
+            {
+                nombre: 'OpenStreetMap',
+                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                opciones: { subdomains: 'abc', attribution: ATRIB_OSM }
+            }
+        ];
+
+        let proveedorActual = 0;
+
+        function crearCapaCalles(indice) {
+            const p = PROVEEDORES_CALLE[indice];
+            const capa = L.tileLayer(p.url, Object.assign({ maxZoom: 22, maxNativeZoom: 19 }, p.opciones));
+
+            // Si fallan varias imagenes seguidas, este proveedor no sirve en
+            // esta red. Se cuenta y se cambia; un error suelto puede ser una
+            // imagen que no existe en ese zoom y no justifica cambiar.
+            let fallas = 0;
+            capa.on('tileerror', () => {
+                fallas++;
+                if (fallas === 4 && indice + 1 < PROVEEDORES_CALLE.length) {
+                    console.warn(`⚠️ El mapa de calles de ${p.nombre} no responde en esta red. Pasando a ${PROVEEDORES_CALLE[indice + 1].nombre}.`);
+                    const siguiente = crearCapaCalles(indice + 1);
+                    if (map.hasLayer(capa)) {
+                        map.removeLayer(capa);
+                        siguiente.addTo(map);
+                        siguiente.bringToBack();
+                    }
+                    proveedorActual = indice + 1;
+                    window.__capaCalles = siguiente;
+                }
+            });
+
+            capa.on('load', () => { fallas = 0; });
+            return capa;
+        }
+
+        const osm = crearCapaCalles(0);
+        window.__capaCalles = osm;
 
         const sat = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
             maxZoom: 22,
@@ -1836,11 +1891,16 @@ ${p._DEMO ? `
         function toggleLayers() { document.getElementById('layers-drawer').classList.toggle('active'); }
         
         function switchBaseLayer(type) {
-            map.removeLayer(osm);
+            // La capa de calles puede haber cambiado de proveedor sola, si el
+            // primero no respondia en esta red (ver crearCapaCalles). Por eso
+            // se usa la vigente y no la original.
+            const calles = window.__capaCalles || osm;
+
+            map.removeLayer(calles);
             map.removeLayer(sat);
             map.removeLayer(topo);
 
-            if(type === 'osm') map.addLayer(osm);
+            if(type === 'osm') map.addLayer(calles);
             if(type === 'sat') map.addLayer(sat);
             if(type === 'topo') map.addLayer(topo);
 

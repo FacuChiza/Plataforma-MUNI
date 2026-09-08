@@ -1,6 +1,44 @@
-        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19 });
-        const sat = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 22, maxNativeZoom: 19 });
-        const topo = L.tileLayer('https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',{ maxZoom: 22, maxNativeZoom: 19 });
+        // ====================================================================
+        // MAPAS BASE
+        // --------------------------------------------------------------------
+        // POR QUE NO SE USAN LOS SERVIDORES DE OPENSTREETMAP
+        //   Antes el mapa de calles se pedía directamente a
+        //   tile.openstreetmap.org, y en la Municipalidad el mapa aparecía
+        //   cubierto de carteles "Access blocked - Referer is required by tile
+        //   usage policy of OpenStreetMap's volunteer-run servers".
+        //
+        //   No es un error de configuración: es la política de uso de OSM. Sus
+        //   servidores los mantienen voluntarios y están para el sitio de
+        //   OpenStreetMap, no para aplicaciones de terceros. Bloquean según el
+        //   volumen y el origen de las consultas, así que puede funcionar desde
+        //   una red y estar bloqueado desde otra —exactamente lo que pasó acá,
+        //   donde andaba en desarrollo y no en la red municipal—.
+        //
+        //   CARTO y Esri publican estos mismos mapas para que los usen
+        //   aplicaciones. Los datos siguen siendo de OpenStreetMap; cambia
+        //   quién sirve las imágenes. Por eso la atribución los nombra a los
+        //   dos.
+        // ====================================================================
+        const ATRIB_OSM = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+        const osm = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 22,
+            maxNativeZoom: 19,
+            subdomains: 'abcd',
+            attribution: ATRIB_OSM + ' &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        });
+
+        const sat = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            maxNativeZoom: 19,
+            attribution: '&copy; Google'
+        });
+
+        const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 22,
+            maxNativeZoom: 19,
+            attribution: 'Esri'
+        });
 
         const map = L.map('map', { 
             zoomControl: false, 

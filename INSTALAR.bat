@@ -112,47 +112,6 @@ if not exist "servidor\.env" (
 echo        Configuracion guardada.
 
 :configurado
-)
-
-echo.
-echo        Falta cargar los datos de conexion a la base municipal.
-echo.
-echo        Se va a abrir el Bloc de notas con el archivo de
-echo        configuracion. Hay que completar estas cuatro lineas:
-echo.
-echo            DB_SERVER      nombre o IP del servidor de base de datos
-echo            DB_DATABASE    nombre de la base
-echo            DB_USER        usuario
-echo            DB_PASSWORD    contrasena
-echo.
-echo        Si no tenes esos datos, pediselos a quien administre el
-echo        sistema de catastro.
-echo.
-echo        Al terminar: GUARDAR con Ctrl+G y CERRAR el Bloc de notas
-echo        para que la instalacion siga.
-echo.
-pause
-
-copy /y "servidor\.env.example" "servidor\.env" >nul
-if not exist "servidor\.env" (
-    echo.
-    echo  ERROR: no se pudo crear el archivo de configuracion.
-    echo  Puede ser que la carpeta este protegida contra escritura.
-    echo  Probar moviendo el programa a otra carpeta, por ejemplo:
-    echo      C:\VisorCatastral
-    echo.
-    pause
-    exit /b 1
-)
-
-REM  start /wait deja la instalacion detenida hasta que se cierre el Bloc de
-REM  notas. Sin /wait seguiria de largo y probaria la conexion con el archivo
-REM  todavia sin completar.
-start /wait notepad "servidor\.env"
-
-echo        Configuracion guardada.
-
-:configurado
 echo.
 
 REM --------------------------------------------------------------------------

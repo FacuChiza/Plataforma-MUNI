@@ -38,7 +38,49 @@ const path = require('path');
 const fs = require('fs');
 
 const DIR_APP = path.join(__dirname, '..', 'servidor');
-require('dotenv').config({ path: path.join(DIR_APP, '.env') });
+const RUTA_ENV = path.join(DIR_APP, '.env');
+
+/**
+ * Lee el .env sin usar la librería dotenv.
+ *
+ * POR QUÉ A MANO:
+ *   Este script vive en herramientas/, pero las librerías se instalan en
+ *   servidor/node_modules. Node busca los módulos subiendo desde la carpeta
+ *   del archivo, así que un require('dotenv') desde acá no las encuentra y el
+ *   script muere con MODULE_NOT_FOUND antes de poder explicar nada.
+ *
+ *   Eso no se nota en una computadora que ya tenga dotenv instalado en alguna
+ *   carpeta superior —ahí funciona por herencia— y sí falla en una máquina
+ *   limpia, que es justamente donde este script tiene que servir.
+ *
+ *   Un .env son líneas CLAVE=VALOR. Leerlo a mano son diez líneas y elimina la
+ *   dependencia.
+ */
+function cargarEnv(ruta) {
+    if (!fs.existsSync(ruta)) return;
+
+    for (const linea of fs.readFileSync(ruta, 'utf8').split(/\r?\n/)) {
+        const limpia = linea.trim();
+        if (!limpia || limpia.startsWith('#')) continue;
+
+        const corte = limpia.indexOf('=');
+        if (corte < 1) continue;
+
+        const clave = limpia.slice(0, corte).trim();
+        let valor = limpia.slice(corte + 1).trim();
+
+        // Quita comillas si el valor viene entrecomillado
+        if (valor.length > 1 &&
+            ((valor[0] === '"' && valor.endsWith('"')) ||
+             (valor[0] === "'" && valor.endsWith("'")))) {
+            valor = valor.slice(1, -1);
+        }
+
+        if (!(clave in process.env)) process.env[clave] = valor;
+    }
+}
+
+cargarEnv(RUTA_ENV);
 
 let sql;
 try {
@@ -69,11 +111,31 @@ async function main() {
     console.log('\n  DIAGNÓSTICO DE CONEXIÓN - BASE MUNICIPAL');
     console.log('  ============================================================');
 
-    const faltantes = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER', 'DB_DATABASE']
-        .filter((v) => !process.env[v]);
+    const requeridas = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER', 'DB_DATABASE'];
+
+    const faltantes = requeridas.filter((v) => !process.env[v]);
     if (faltantes.length) {
-        console.error(`\n  Faltan variables en el .env: ${faltantes.join(', ')}`);
-        console.error(`  Ruta esperada del archivo: ${path.join(DIR_APP, '.env')}\n`);
+        console.error(`\n  Faltan datos en el archivo de configuracion: ${faltantes.join(', ')}`);
+        console.error(`  Archivo: ${RUTA_ENV}\n`);
+        process.exit(2);
+    }
+
+    // La plantilla trae la palabra "completar" como marcador. Si sigue ahí es
+    // que nadie cargó los datos. Sin este control, el script intenta conectarse
+    // a un servidor que se llama literalmente "completar" y devuelve un error
+    // de red que no le dice a nadie qué fue lo que pasó realmente.
+    const sinCompletar = requeridas.filter(
+        (v) => String(process.env[v] || '').trim().toLowerCase() === 'completar'
+    );
+    if (sinCompletar.length) {
+        console.error('\n  FALTA COMPLETAR LA CONFIGURACION');
+        console.error('  ============================================================\n');
+        console.error(`  Estos datos siguen sin cargar: ${sinCompletar.join(', ')}\n`);
+        console.error('  Abrir este archivo con el Bloc de notas y reemplazar la palabra');
+        console.error('  "completar" por los datos reales de la base municipal:\n');
+        console.error(`      ${RUTA_ENV}\n`);
+        console.error('  Si no tenes esos datos, pediselos a quien administre el');
+        console.error('  sistema de catastro.\n');
         process.exit(2);
     }
 

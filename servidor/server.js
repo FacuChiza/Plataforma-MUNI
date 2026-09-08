@@ -250,11 +250,28 @@ function revisarConfiguracion() {
     const faltantes = requeridas.filter((v) => !process.env[v]);
 
     if (faltantes.length > 0) {
-        console.warn('⚠️  Faltan variables de entorno:', faltantes.join(', '));
+        console.warn('⚠️  Faltan datos en el archivo .env:', faltantes.join(', '));
         console.warn('    Copiar .env.example como .env y completarlo.');
         console.warn('    El visor va a arrancar sin datos de la base municipal.');
         return false;
     }
+
+    // La plantilla trae "completar" como marcador. Si sigue ahí, nadie cargó
+    // los datos. Sin este control el servidor intenta conectarse a un equipo
+    // llamado literalmente "completar" y el error que sale ("getaddrinfo
+    // ENOTFOUND completar") no le dice a nadie cuál fue el problema real.
+    const sinCompletar = requeridas.filter(
+        (v) => String(process.env[v] || '').trim().toLowerCase() === 'completar'
+    );
+    if (sinCompletar.length > 0) {
+        console.warn('⚠️  FALTA COMPLETAR LA CONFIGURACION DE LA BASE DE DATOS');
+        console.warn('    Sigue sin cargar:', sinCompletar.join(', '));
+        console.warn('    Editar servidor/.env y reemplazar la palabra "completar"');
+        console.warn('    por los datos reales de la base municipal.');
+        console.warn('    El visor va a abrir, pero las fichas van a salir sin datos.');
+        return false;
+    }
+
     return true;
 }
 
@@ -323,7 +340,23 @@ app.use((req, res, next) => {
 // puede activar un CSP estricto sin romper nada.
 app.use(helmet({
     contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy: false,
+
+    // ------------------------------------------------------------------
+    // SIN ESTO EL MAPA NO SE VE.
+    //
+    // helmet, por defecto, manda "Referrer-Policy: no-referrer". Con eso el
+    // navegador no le dice a OpenStreetMap desde dónde se le está pidiendo
+    // cada tile, y la política de uso de sus servidores (que son
+    // voluntarios) exige ese dato: responde 403 y el mapa aparece cubierto
+    // de carteles "Access blocked - Referer is required".
+    //
+    // strict-origin-when-cross-origin hace que se mande solamente el
+    // origen (http://localhost:8000), nunca la dirección completa ni los
+    // parámetros de una consulta. Alcanza para OpenStreetMap y no filtra
+    // qué parcela se estaba mirando.
+    // ------------------------------------------------------------------
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
 // El frontend vive en la carpeta hermana web/. Está separado del servidor a

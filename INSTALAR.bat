@@ -70,17 +70,48 @@ echo.
 REM --------------------------------------------------------------------------
 REM  PASO 3: configuracion de la base de datos
 REM ----------------------------------------------------------------------------
-REM  Los datos se cargan editando el archivo en el Bloc de notas, y no
-REM  preguntandolos en esta ventana. Es mas simple y menos fragil: escribir una
-REM  contrasena en la consola no permite corregir errores, y el archivo ya trae
-REM  explicado que significa cada linea.
+REM  Los datos se cargan en una ventana con campos, parecida al cuadro de
+REM  conexion de SQL Server Management Studio: la contrasena va oculta y hay un
+REM  boton para probar la conexion antes de guardar. La dibuja PowerShell con
+REM  Windows Forms, que ya viene incluido en Windows.
 REM --------------------------------------------------------------------------
 echo  [3/4] Configuracion de la base de datos...
 
 if exist "servidor\.env" (
     echo        Ya existe una configuracion. Se conserva.
-    echo        Para cambiarla, editar el archivo servidor\.env
+    echo        Para cambiarla: doble clic en CONFIGURAR.bat
     goto :configurado
+)
+
+echo.
+echo        Falta cargar los datos de conexion a la base municipal.
+echo        Se abre una ventana para completarlos.
+echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "herramientas\configurar.ps1"
+if errorlevel 1 (
+    echo.
+    echo  Se cancelo la configuracion. No se guardo nada.
+    echo  Volve a ejecutar este archivo cuando tengas los datos.
+    echo.
+    pause
+    exit /b 1
+)
+
+if not exist "servidor\.env" (
+    echo.
+    echo  ERROR: no se pudo guardar la configuracion.
+    echo  Puede ser que la carpeta este protegida contra escritura.
+    echo  Probar moviendo el programa a otra carpeta, por ejemplo:
+    echo      C:\VisorCatastral
+    echo.
+    pause
+    exit /b 1
+)
+
+echo        Configuracion guardada.
+
+:configurado
 )
 
 echo.
@@ -148,7 +179,7 @@ if "%RESULTADO%"=="0" (
     echo   El visor igual va a abrir y el mapa se va a ver, pero las
     echo   fichas de las parcelas van a salir sin datos.
     echo.
-    echo   Para corregir los datos de conexion: editar servidor\.env
+    echo   Para corregir los datos de conexion: doble clic en CONFIGURAR.bat
 )
 echo  ============================================================
 echo.

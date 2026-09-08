@@ -15,9 +15,16 @@ consultada en vivo contra la base municipal.
 3. Doble clic en **`INSTALAR.bat`** — una sola vez
 4. Doble clic en **`INICIAR.bat`** — cada vez que se quiera usar
 
-`INSTALAR.bat` verifica que esté Node.js, baja los componentes, pide los datos
-de conexión a la base y prueba que funcione, diciendo el motivo si algo falla.
+`INSTALAR.bat` verifica que esté Node.js, baja los componentes y abre una
+ventana para cargar los datos de conexión —con la contraseña oculta y un botón
+para probar la conexión antes de guardar, parecida al cuadro de conexión de SQL
+Server Management Studio—. Al final prueba la conexión y dice el motivo si algo
+falla.
+
 `INICIAR.bat` levanta el visor y lo abre en el navegador.
+
+`CONFIGURAR.bat` vuelve a abrir esa ventana para corregir el servidor, el
+usuario o la contraseña sin reinstalar nada.
 
 La guía completa, con los problemas frecuentes y qué hacer en cada caso, está en
 **[docs/instalacion-en-la-muni.md](docs/instalacion-en-la-muni.md)**. Está
@@ -99,6 +106,7 @@ Dejar en `false` en el servidor.
 ```
 INSTALAR.bat             instalación en un doble clic (una sola vez)
 INICIAR.bat              arranca el visor y lo abre en el navegador
+CONFIGURAR.bat           cambia los datos de conexión a la base
 
 web/                     frontend — es lo que se publica
   index.html             maquetado del visor

@@ -40,14 +40,18 @@ Se abre una ventana negra que va contando los pasos. Va a:
 3. Pedir los datos de conexión a la base
 4. Probar que la conexión funcione
 
-Cuando pida los datos de la base, hay que tener a mano:
+Cuando llegue el paso 3 se abre una ventana con cuatro campos:
 
-- nombre o IP del servidor de base de datos
-- nombre de la base
-- usuario y contraseña
+- **Nombre del servidor** — el equipo donde está la base, o su IP
+- **Nombre de la base**
+- **Nombre de usuario**
+- **Contraseña** — se escribe oculta
 
-Si no los tenés, cerrá la ventana y pedíselos a quien administre el sistema.
-Se cargan una sola vez y quedan guardados.
+El botón **Probar conexión** verifica los datos antes de guardar y dice qué
+falla si algo falla. Después, **Guardar**.
+
+Si no tenés esos datos, apretá Cancelar y pedíselos a quien administre el
+sistema de catastro. Se cargan una sola vez y quedan guardados.
 
 ### Si dice que falta Node.js
 
@@ -105,13 +109,13 @@ Otra forma: entrar a <http://localhost:8000/health>. Tiene que decir
 
 ### "Los campos de la ficha salen vacíos"
 
-El visor no está llegando a la base. Doble clic en `INSTALAR.bat`: en el paso 4
-va a decir el motivo. Los dos más comunes:
+El visor no está llegando a la base. Doble clic en **`CONFIGURAR.bat`**: se
+abre la misma ventana de los datos de conexión, con lo que está cargado hoy, y
+el botón **Probar conexión** dice exactamente qué falla. Los dos motivos más
+comunes:
 
 - la computadora no está en la red de la Municipalidad
 - el usuario o la contraseña quedaron mal cargados
-
-Para corregir los datos: abrir `servidor\.env` con el Bloc de notas.
 
 ### "Aparece un cartel amarillo de datos de prueba"
 
@@ -123,6 +127,9 @@ En una computadora de la Municipalidad tiene que decir:
 ```
 MODO_DEMO=false
 ```
+
+Se corrige abriendo `servidor\.env` con el Bloc de notas. Si la configuración
+se guardó desde `CONFIGURAR.bat`, ya queda en `false`.
 
 Así, si algo falla, se nota, en lugar de quedar tapado por datos falsos.
 
@@ -142,7 +149,8 @@ Abrirlo a mano y entrar a <http://localhost:8000>.
 Cuando haya cambios, repetir los pasos 1 y 2 sobre una carpeta nueva, y después:
 
 1. Copiar el archivo `servidor\.env` de la instalación vieja a la nueva
-   (así no hay que cargar de nuevo los datos de conexión)
+   (así no hay que cargar de nuevo los datos de conexión; si no aparece, está
+   oculto: activar "Elementos ocultos" en la pestaña Vista del explorador)
 2. Ejecutar `INSTALAR.bat` en la carpeta nueva
 3. Comprobar que funcione y recién ahí borrar la carpeta vieja
 

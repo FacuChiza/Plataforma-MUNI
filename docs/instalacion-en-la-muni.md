@@ -155,13 +155,37 @@ Abrirlo a mano y entrar a <http://localhost:8000>.
 
 ## Actualizar a una versión nueva
 
-Cuando haya cambios, repetir los pasos 1 y 2 sobre una carpeta nueva, y después:
+Doble clic en:
 
-1. Copiar el archivo `servidor\.env` de la instalación vieja a la nueva
-   (así no hay que cargar de nuevo los datos de conexión; si no aparece, está
-   oculto: activar "Elementos ocultos" en la pestaña Vista del explorador)
-2. Ejecutar `INSTALAR.bat` en la carpeta nueva
-3. Comprobar que funcione y recién ahí borrar la carpeta vieja
+```
+ACTUALIZAR.bat
+```
+
+Baja la última versión y la aplica sola. **No toca la configuración de la base
+ni los componentes instalados**, así que al terminar el visor funciona sin
+volver a configurar nada.
+
+Al final muestra qué versión había antes y cuál quedó.
+
+### Cómo saber qué versión está corriendo
+
+La versión aparece **abajo a la derecha del mapa**, junto al sistema de
+coordenadas. También al arrancar, en la ventana negra.
+
+Esto importa: si algo que ya se corrigió sigue fallando, casi siempre es que la
+computadora está ejecutando una instalación vieja. Antes de buscar el problema
+en otro lado, mirá ese número.
+
+### Si la computadora no tiene internet
+
+`ACTUALIZAR.bat` necesita salida a internet para bajar la versión nueva. Si el
+equipo no la tiene, hay que hacerlo a mano desde otra máquina:
+
+1. Bajar el ZIP de <https://github.com/FacuChiza/Plataforma-MUNI>
+2. Descomprimirlo y copiar **encima** de la carpeta del visor, eligiendo
+   **Reemplazar los archivos** cuando Windows pregunte
+3. **No tocar `servidor\.env`**: ahí están los datos de conexión
+4. Comprobar que el número de versión abajo a la derecha del mapa haya cambiado
 
 ---
 

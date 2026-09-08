@@ -38,6 +38,27 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 // ============================================================================
+// VERSION DEL PROGRAMA
+// ----------------------------------------------------------------------------
+// Se muestra al arrancar, en el pie del visor y en /version.
+//
+// Existe porque sin esto no hay forma de saber qué versión está corriendo una
+// computadora. Si alguien descomprime la actualización en otra carpeta, o
+// sigue ejecutando la instalación vieja, el visor abre igual y parece estar
+// actualizado: el síntoma es que "no anda lo que ya arreglamos". Con la
+// versión a la vista, eso se responde mirando la pantalla en vez de deducirlo.
+// ============================================================================
+const VERSION = (() => {
+    try {
+        return require('fs')
+            .readFileSync(path.join(__dirname, '..', 'VERSION.txt'), 'utf8')
+            .trim() || 'desconocida';
+    } catch (err) {
+        return 'desconocida';
+    }
+})();
+
+// ============================================================================
 // 1. CONFIGURACIÓN DE SQL SERVER (ahora vía variables de entorno)
 // ============================================================================
 // IMPORTANTE: crear un archivo .env (ver .env.example) con estos valores
@@ -433,9 +454,16 @@ app.use('/api/', apiLimiter);
 // Permite monitorear el servidor (uptime checks, balanceadores, etc.) sin
 // necesidad de golpear SQL Server. Informa si la DB está o no disponible.
 // ============================================================================
+// Devuelve solo la versión, para poder comprobarla desde el navegador sin
+// mirar la consola del servidor.
+app.get('/version', (req, res) => {
+    res.type('text').send(VERSION);
+});
+
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
+        version: VERSION,
         database: getPool() ? 'connected' : 'disconnected',
         timestamp: new Date().toISOString()
     });
@@ -913,7 +941,8 @@ app.get('/', (req, res) => {
         const html = fs.readFileSync(rutaHtml, 'utf8')
             .replace(/(css\/app\.css)\?v=[^"']*/g, `$1?v=${version('css/app.css')}`)
             .replace(/(js\/config\.js)\?v=[^"']*/g, `$1?v=${version('js/config.js')}`)
-            .replace(/(js\/app\.js)\?v=[^"']*/g,    `$1?v=${version('js/app.js')}`);
+            .replace(/(js\/app\.js)\?v=[^"']*/g,    `$1?v=${version('js/app.js')}`)
+            .replace(/__VERSION__/g, VERSION);
 
         res.type('html').send(html);
     } catch (err) {
@@ -949,7 +978,7 @@ async function start() {
         console.log(`
     ====================================================
     VISOR SIG MUNICIPAL - VILLA DE MERLO
-    Servidor Profesional Iniciado de manera Correcta
+    VERSION ${VERSION}
     ====================================================
     > Local:    http://localhost:${PORT}
     > DB:       ${getPool() ? 'conectada' : 'NO conectada (modo degradado)'}

@@ -26,6 +26,20 @@ falla.
 `CONFIGURAR.bat` vuelve a abrir esa ventana para corregir el servidor, el
 usuario o la contraseña sin reinstalar nada.
 
+`ACTUALIZAR.bat` baja la última versión y la aplica **conservando la
+configuración de la base y los componentes ya instalados**. Es la forma
+recomendada de actualizar: bajar el ZIP y descomprimir a mano falla de maneras
+que no se notan —se descomprime en otra carpeta, o Windows omite archivos al
+reemplazar— y la computadora queda ejecutando la versión anterior sin que nadie
+se dé cuenta.
+
+### Saber qué versión está corriendo
+
+La versión figura **abajo a la derecha del mapa**, al lado del sistema de
+coordenadas. También al arrancar el servidor, y en <http://localhost:8000/version>.
+
+Si algo que ya se corrigió sigue fallando, lo primero es mirar ese número.
+
 La guía completa, con los problemas frecuentes y qué hacer en cada caso, está en
 **[docs/instalacion-en-la-muni.md](docs/instalacion-en-la-muni.md)**. Está
 escrita para alguien que no programa.
@@ -107,6 +121,8 @@ Dejar en `false` en el servidor.
 INSTALAR.bat             instalación en un doble clic (una sola vez)
 INICIAR.bat              arranca el visor y lo abre en el navegador
 CONFIGURAR.bat           cambia los datos de conexión a la base
+ACTUALIZAR.bat           baja la última versión conservando la configuración
+VERSION.txt              versión del programa
 
 web/                     frontend — es lo que se publica
   index.html             maquetado del visor

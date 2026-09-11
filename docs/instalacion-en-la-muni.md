@@ -153,6 +153,16 @@ intentar, o reiniciar la computadora.
 No hace falta cerrar el visor anterior: este busca su propio puerto y los dos
 pueden convivir.
 
+### "Se abre en Firefox y lo quiero en Chrome"
+
+Ya abre en Chrome. `INICIAR.bat` lo busca en los lugares donde se instala
+habitualmente y, si no lo encuentra ahí, en el registro de Windows. Al arrancar
+avisa cuál va a usar, en el renglón `Navegador:`.
+
+Si esa computadora no tiene Chrome instalado, abre con el navegador
+predeterminado de Windows, como antes. El visor funciona igual en Firefox y en
+Edge: esto es una preferencia, no un requisito.
+
 ### "El navegador no se abre solo"
 
 Abrirlo a mano y entrar a `http://localhost:` seguido del **número de puerto que

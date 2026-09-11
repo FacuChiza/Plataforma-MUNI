@@ -357,12 +357,46 @@ function getPool() {
 // ============================================================================
 app.use(compression());
 
-// La cabecera X-Datos-De-Prueba tiene que poder leerse desde el navegador aun
-// cuando el frontend esté publicado en otro dominio (por ejemplo en Vercel,
-// con la API corriendo dentro de la Municipalidad). Sin exponerla, el visor no
-// puede avisar que los datos no son reales.
+// ============================================================================
+// CORS - SOLO SI EL FRENTE SE PUBLICA EN OTRO DOMINIO (por ejemplo Vercel)
+// ----------------------------------------------------------------------------
+// POR DEFECTO NO SE ACTIVA, y eso es lo más seguro. Hoy la web y la API salen
+// del mismo server.js, así que comparten origen: el navegador no necesita
+// ningún permiso cruzado y no se manda ninguna cabecera de CORS.
+//
+// El escenario cruzado aparece solo si el frente se publica aparte (Vercel)
+// apuntando a esta API por un túnel. Ahí SÍ hace falta autorizar ese origen,
+// y se hace listándolo en el .env, separando por coma si hubiera más de uno:
+//
+//   ORIGENES_PERMITIDOS=https://catastro-merlo.vercel.app
+//
+// NUNCA se usa "*": eso abriría la API a cualquier página de internet, que
+// podría leer el padrón entero desde el navegador de cualquiera. Solo se
+// responde a los orígenes de esta lista y a ningún otro. Ver docs/acceso-remoto.md
+//
+// Ojo: esto autoriza al NAVEGADOR a leer la respuesta. No es autenticación.
+// El candado que decide QUIÉN entra es Cloudflare Access, en el túnel.
+// ============================================================================
+const ORIGENES_PERMITIDOS = String(process.env.ORIGENES_PERMITIDOS || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+
 app.use((req, res, next) => {
+    // Esta cabecera deja que el navegador LEA X-Datos-De-Prueba aunque el
+    // frente esté en otro dominio. Sin ella, el visor no puede avisar que los
+    // datos son de prueba. No abre nada: solo permite leer esas dos cabeceras.
     res.setHeader('Access-Control-Expose-Headers', 'X-Datos-De-Prueba, X-Resultado-Recortado');
+
+    const origen = req.headers.origin;
+    if (origen && ORIGENES_PERMITIDOS.includes(origen)) {
+        res.setHeader('Access-Control-Allow-Origin', origen);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        // El navegador pregunta con un OPTIONS antes de la consulta real
+        // (preflight). Se responde vacío y con las cabeceras de arriba.
+        if (req.method === 'OPTIONS') return res.sendStatus(204);
+    }
     next();
 });
 
@@ -993,7 +1027,22 @@ app.use((err, req, res, next) => {
 async function start() {
     await initDb(); // Intenta conectar a SQL Server (no bloquea el arranque si falla)
 
-    app.listen(PORT, () => {
+    // ------------------------------------------------------------------------
+    // A QUÉ INTERFAZ SE ATA EL SERVIDOR
+    //
+    //   Por defecto escucha en todas las interfaces (0.0.0.0), que es como
+    //   funcionó siempre: así se puede abrir en la propia computadora y también
+    //   desde otra de la red de la Muni.
+    //
+    //   Para el acceso remoto por túnel conviene ponerle HOST=127.0.0.1 en el
+    //   .env. Con eso la API deja de escuchar a la red y solo la alcanza el
+    //   túnel, que corre en la misma computadora. Es una cerradura más: aunque
+    //   alguien esté dentro de la red municipal, no llega a la API sin pasar
+    //   por el candado del túnel. Ver docs/acceso-remoto.md
+    // ------------------------------------------------------------------------
+    const HOST = String(process.env.HOST || '0.0.0.0').trim();
+
+    app.listen(PORT, HOST, () => {
         console.log(`
     ====================================================
     VISOR SIG MUNICIPAL - VILLA DE MERLO

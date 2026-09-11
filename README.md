@@ -159,6 +159,7 @@ herramientas/            diagnóstico y verificación
 docs/                    documentación
   instalacion-en-la-muni.md   guía paso a paso para quien no programa
   actualizar-el-plano.md      cómo cargar parcelas nuevas en el visor
+  acceso-remoto.md            usar el visor desde fuera de la red municipal
   conexion-con-la-base.md     qué campo sale de qué vista y qué falta confirmar
 ```
 

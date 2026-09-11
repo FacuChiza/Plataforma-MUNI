@@ -269,7 +269,11 @@
                     <!-- Inyectado dinámicamente -->
                 </div> 
 
-                <div class="modal-footer p-4 bg-white border-t border-slate-200 flex-shrink-0 flex justify-end shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                <div class="modal-footer p-4 bg-white border-t border-slate-200 flex-shrink-0 flex flex-wrap justify-end gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <button onclick="imprimirLibreDeuda()" class="print-btn-faltas px-6 py-3 text-xs w-auto">
+                        <span class="material-icons text-sm">gavel</span>
+                        Libre Deuda de Faltas
+                    </button>
                     <button onclick="imprimirFicha()" class="print-btn px-6 py-3 text-xs w-auto">
                         <span class="material-icons text-sm">picture_as_pdf</span>
                         Imprimir Plancheta Catastral

@@ -162,6 +162,25 @@ docs/                    documentación
   conexion-con-la-base.md     qué campo sale de qué vista y qué falta confirmar
 ```
 
+### Documentos que emite el visor
+
+Desde la ficha de una parcela se imprimen dos documentos distintos, para
+trámites distintos:
+
+- **Plancheta catastral** — la ficha del inmueble con el plano de la parcela
+  dentro de su manzana. Entra en una hoja.
+- **Constancia de Libre de Deuda (Juzgado de Faltas)** — certifica que el
+  titular no registra infracciones. Es solo texto, sin mapa, y su redacción
+  sale de la plantilla `LIBRE__DEUDA__DE__FALTAS.docx` de la Municipalidad:
+  **no se modifica**, porque es un documento con valor administrativo.
+
+En los dos, los campos quedan editables antes de imprimir. En el libre de
+deuda, el N° de ticket se completa a mano.
+
+> Cuando la parcela tiene más de un titular, el libre de deuda se completa con
+> el primero —está redactado en singular— y aparece un aviso **en pantalla, que
+> no se imprime**, listando a todos, para que el agente corrija si corresponde.
+
 ### Actualizar el plano con parcelas nuevas
 
 El procedimiento completo está en

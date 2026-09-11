@@ -913,6 +913,246 @@
             }
         }
 
+        // ====================================================================
+        // CONSTANCIA DE LIBRE DE DEUDA (JUZGADO DE FALTAS)
+        // --------------------------------------------------------------------
+        // Documento distinto de la plancheta catastral y para otro trámite:
+        // certifica que el titular no registra infracciones. El texto, el orden
+        // y la redacción vienen de la plantilla LIBRE__DEUDA__DE__FALTAS.docx
+        // que usa la Municipalidad, así que NO se tocan: es un documento con
+        // valor administrativo y tiene que salir como lo esperan en la mesa de
+        // entrada.
+        //
+        // A diferencia de la plancheta, es solo texto: no lleva captura del
+        // mapa, así que no interviene html2canvas.
+        //
+        // Los campos van editables a propósito (contenteditable), para que el
+        // agente pueda corregir cualquier dato antes de imprimir, y el N° de
+        // ticket queda en blanco porque se completa a mano.
+        // ====================================================================
+        const DIAS_EN_LETRAS = [
+            '', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ',
+            'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE',
+            'VEINTIUNO', 'VEINTIDÓS', 'VEINTITRÉS', 'VEINTICUATRO', 'VEINTICINCO', 'VEINTISÉIS', 'VEINTISIETE', 'VEINTIOCHO', 'VEINTINUEVE', 'TREINTA', 'TREINTA Y UNO'
+        ];
+        const MESES_EN_LETRAS = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+        function diaEnLetras(dia) { return DIAS_EN_LETRAS[dia] || String(dia); }
+
+        async function imprimirLibreDeuda() {
+            if (!currentFeatureProps) return;
+            closeModal();
+            document.getElementById('loader').style.display = 'flex';
+
+            try {
+                const p = currentFeatureProps;
+                const nomen = p.NOMENCLA || p.NOMENCLATURA || p.NOMENCLATU || 'S/N';
+
+                // Misma descomposición de la nomenclatura que la plancheta.
+                let nomenCompleta = String(nomen).trim();
+                let seccionValor = p.SECCION || '-';
+                let manzanaValor = p.MANZANA || '-';
+                let parcelaValor = p.PARCELA_ME || p.PARCELA || '-';
+
+                if (nomenCompleta.length >= 16) {
+                    seccionValor = nomenCompleta.substring(0, 4);
+                    manzanaValor = nomenCompleta.substring(4, 10);
+                    parcelaValor = nomenCompleta.substring(10, 16);
+                } else {
+                    if (seccionValor !== '-' && /^\d+$/.test(String(seccionValor).trim())) seccionValor = String(seccionValor).trim().padStart(4, '0');
+                    if (manzanaValor !== '-' && /^\d+$/.test(String(manzanaValor).trim())) manzanaValor = String(manzanaValor).trim().padStart(6, '0');
+                    if (parcelaValor !== '-' && /^\d+$/.test(String(parcelaValor).trim())) parcelaValor = String(parcelaValor).trim().padStart(6, '0');
+                }
+
+                // Fecha redactada como la exige el formato protocolar:
+                // "A LOS VEINTICINCO DÍAS DEL MES DE JUNIO DEL AÑO 2026".
+                const hoy = new Date();
+                const diaTexto = diaEnLetras(hoy.getDate());
+                const mesTexto = MESES_EN_LETRAS[hoy.getMonth()];
+                const anioTexto = hoy.getFullYear();
+
+                // --------------------------------------------------------
+                // De dónde salen los datos del titular.
+                //
+                // La lista TITULARES es la fuente buena: una parcela puede
+                // tener varios condóminos. El documento, en cambio, está
+                // redactado en singular ("EL/LA SR./SRA. ..."), que es como lo
+                // usa el Juzgado, así que se completa con el primero y el campo
+                // queda editable.
+                //
+                // Cuando hay más de uno se avisa EN PANTALLA, en la zona que no
+                // se imprime: sin eso, la constancia saldría a nombre de un
+                // solo condómino sin que nadie lo note. Es el mismo problema de
+                // fondo que ya arreglamos en la ficha, y acá importa más porque
+                // el papel se entrega.
+                // --------------------------------------------------------
+                const titulares = Array.isArray(p.TITULARES) && p.TITULARES.length
+                    ? p.TITULARES
+                    : (p.APELLIDO || p.NOMBRE
+                        ? [{ APELLIDO: p.APELLIDO, NOMBRE: p.NOMBRE, CALLE: p.CALLE,
+                             NUMERACION: p.NUMERACION, DOCUMENTO: p.DOCUMENTO }]
+                        : []);
+                const titular = titulares[0] || {};
+
+                const nombreTitular = `${titular.APELLIDO || ''} ${titular.NOMBRE || ''}`.trim() || 'S/D';
+                const domicilioTitular = `${titular.CALLE || 'S/D'} N° ${titular.NUMERACION || '---'}`;
+                const numdocumento = `${titular.DOCUMENTO || ''}`;
+
+                const origen = CONFIG.API_BASE || window.location.origin;
+
+                // Escapado defensivo, igual que en la plancheta: los datos
+                // vienen de la base y se insertan en HTML.
+                const esc = (v) => String(v === null || v === undefined ? '' : v)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+                const avisoVariosTitulares = titulares.length > 1 ? `
+                    <div class="aviso-condominos no-print">
+                        <b>Atención:</b> esta parcela tiene ${titulares.length} titulares registrados.
+                        La constancia se completó con el primero
+                        (${esc(nombreTitular)}). Si corresponde nombrar a otro, o a todos,
+                        corregilo en el documento antes de imprimir: los campos se editan
+                        haciendo clic.
+                        <div class="lista-condominos">
+                            ${titulares.map((t, i) => `<div>${i + 1}. ${esc(`${t.APELLIDO || ''} ${t.NOMBRE || ''}`.trim())}${t.DOCUMENTO ? ` — DNI ${esc(t.DOCUMENTO)}` : ''}</div>`).join('')}
+                        </div>
+                    </div>` : '';
+
+                const printWindow = window.open('', '_blank');
+                if (!printWindow) {
+                    alert('El navegador bloqueó la ventana del documento.\n\nHabilitá las ventanas emergentes para este sitio y volvé a intentar.');
+                    return;
+                }
+
+                printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Libre de Deuda de Faltas - ${esc(p.NRO_RENTA || p.PADRON || '')}</title>
+<style>
+    /* SIN DEPENDENCIAS EXTERNAS
+       La versión anterior de este documento cargaba Tailwind desde internet
+       para dos o tres clases. En una computadora municipal sin salida a
+       internet eso deja el documento sin estilos justo cuando hay que
+       imprimirlo. Acá está todo el CSS que necesita, escrito a mano. */
+    @media print {
+        @page { size: A4 portrait; margin: 18mm; }
+        .no-print { display: none !important; }
+        body { -webkit-print-color-adjust: exact; }
+    }
+    body { font-family: 'Arial', sans-serif; font-size: 13px; color: #000; line-height: 1.6; margin: 0; padding: 18mm; }
+
+    /* El escudo queda fijo en su posición original (borde izquierdo del
+       encabezado): se saca del flujo con position:absolute para que no empuje
+       ni condicione al bloque de texto. El título y el subtítulo, al ser un
+       bloque normal a ancho completo, se centran sobre toda la hoja de forma
+       independiente de dónde está el escudo. */
+    .header-faltas { position: relative; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 24px; }
+    .escudo-box { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+    .escudo-box img { max-width: 100%; max-height: 100%; }
+    .titulo-faltas { font-size: 26px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; line-height: 1; text-align: center; }
+    .subtitulo-faltas { font-size: 13px; font-weight: 700; margin-top: 4px; text-align: center; }
+    .titulo-doc { text-align: center; font-size: 16px; font-weight: 800; text-decoration: underline; text-transform: uppercase; margin-bottom: 24px; }
+    .cuerpo-parrafo { text-align: justify; text-transform: uppercase; margin-bottom: 18px; }
+
+    /* Campos corregibles: subrayado punteado sutil, y resaltan en amarillo al
+       hacer foco, para que se vea de un vistazo qué se puede editar. */
+    .campo-editable { outline: none; cursor: text; border-bottom: 1px dashed #94a3b8; padding: 0 2px; }
+    .campo-editable:focus { background: #fef9c3; border-bottom: 1px solid #ca8a04; }
+    .obs-linea { margin-bottom: 15px; }
+    .ticket-field {
+        outline: none; cursor: text; font-weight: 800; border: 1px solid #000;
+        padding: 3px 15px; display: inline-block; min-width: 180px;
+    }
+    .ticket-field:focus { background: #fef9c3; }
+    .ticket-field:empty:before { content: attr(data-placeholder); color: #9ca3af; font-weight: 400; }
+    .firma-block { margin-top: 70px; font-size: 13px; }
+    .firma-linea { margin-bottom: 12px; }
+
+    /* Aviso de condóminos: solo pantalla, nunca sale impreso. */
+    .aviso-condominos {
+        background: #fef3c7; border: 1px solid #f59e0b; color: #78350f;
+        padding: 10px 14px; margin-bottom: 20px; font-size: 12px; line-height: 1.5;
+    }
+    .lista-condominos { margin-top: 6px; font-weight: 700; }
+
+    .pie-acciones { margin-top: 60px; text-align: center; }
+    .boton-imprimir {
+        background: #4338ca; color: #fff; border: none; cursor: pointer;
+        padding: 12px 32px; font-weight: 800; font-size: 11px;
+        text-transform: uppercase; letter-spacing: .1em;
+        box-shadow: 0 4px 12px rgba(67,56,202,.25);
+    }
+    .boton-imprimir:hover { background: #3730a3; }
+    .nota-pie { font-size: 10px; color: #6b7280; margin-top: 8px; }
+</style>
+</head>
+<body>
+    ${avisoVariosTitulares}
+
+    <div class="header-faltas">
+        <div class="escudo-box">
+            <img src="${origen}/img/escudoMerlo.jpg" alt="Escudo de Villa de Merlo">
+        </div>
+        <div>
+            <div class="titulo-faltas">Juzgado de Faltas</div>
+            <div class="subtitulo-faltas">Villa de Merlo</div>
+        </div>
+    </div>
+
+    <div class="titulo-doc">Constancia de Libre de Deuda</div>
+
+    <p class="cuerpo-parrafo">
+        POR LA PRESENTE SE DEJA CONSTANCIA QUE
+        <span class="campo-editable" contenteditable="true">EL/LA SR./SRA.</span>
+        <span class="campo-editable" contenteditable="true">${esc(nombreTitular)}</span>,
+        D.N.I. N°<span class="campo-editable" contenteditable="true">${esc(numdocumento)}</span>,
+        CON DOMICILIO EN CALLE <span class="campo-editable" contenteditable="true">${esc(domicilioTitular)}</span>,
+        VILLA DE MERLO, SAN LUIS, PROPIETARIO/A DEL INMUEBLE QUE SE DESIGNA COMO SECCIÓN
+        <span class="campo-editable" contenteditable="true">${esc(seccionValor)}</span>,
+        MANZANA <span class="campo-editable" contenteditable="true">${esc(manzanaValor)}</span>,
+        PARCELA <span class="campo-editable" contenteditable="true">${esc(parcelaValor)}</span>,
+        NO REGISTRA ANTECEDENTES MOTIVADOS EN INFRACCIONES DETECTADAS POR INSPECTORES DE LA
+        MUNICIPALIDAD DE LA VILLA DE MERLO, SAN LUIS. --------
+    </p>
+
+    <p class="cuerpo-parrafo">
+        LA VIGENCIA DE LA CONSTANCIA SE EXTIENDE POR EL TÉRMINO DE <b>48 HORAS</b>, PARA SER
+        PRESENTADOS ANTE LA AUTORIDAD MUNICIPAL REQUIRENTE; EN LA VILLA DE MERLO, SAN LUIS,
+        A LOS <span class="campo-editable" contenteditable="true">${esc(diaTexto)}</span> DÍAS DEL MES DE
+        <span class="campo-editable" contenteditable="true">${esc(mesTexto)}</span> DEL AÑO
+        <span class="campo-editable" contenteditable="true">${esc(anioTexto)}</span>.
+    </p>
+
+    <div class="obs-linea">
+        <u>OBSERVACIONES:</u> N° DE TICKET DE LIBRE DE DEUDA:
+        <span class="ticket-field" contenteditable="true" data-placeholder="Completar N°"></span>
+    </div>
+
+    <div class="firma-block">
+        <div class="firma-linea">Firma del solicitante: ...........................</div>
+        <div class="firma-linea">Aclaración: ..................................</div>
+        <div class="firma-linea">DNI: ...............</div>
+    </div>
+
+    <div class="pie-acciones no-print">
+        <button class="boton-imprimir" onclick="window.print()">Imprimir Libre Deuda</button>
+        <p class="nota-pie">
+            Revise y complete los campos editables (resaltan en amarillo al hacer clic)
+            antes de imprimir, especialmente el N° de Ticket.
+        </p>
+    </div>
+</body>
+</html>
+                `);
+                printWindow.document.close();
+            } catch (e) {
+                console.error('❌ No se pudo generar el Libre de Deuda:', e);
+            } finally {
+                document.getElementById('loader').style.display = 'none';
+            }
+        }
+
         async function imprimirFicha() {
             if (!currentFeatureProps) return;
             closeModal();

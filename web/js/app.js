@@ -342,8 +342,23 @@
         const ESTILO_MANZANA = { color: '#0ea5e9', weight: 1.6, fillOpacity: 0.12, fillColor: '#0ea5e9' };
         const ESTILO_SELECCION = { color: '#f59e0b', weight: 3, fillOpacity: 0.4, fillColor: '#f59e0b' };
 
-        // Debajo de este zoom los nombres de calle del mapa base no se leen.
-        const ZOOM_MINIMO_LEGIBLE = 17;
+        // ------------------------------------------------------------------
+        // Hasta este zoom vale la pena alejarse para mostrar la manzana entera.
+        //
+        // Estaba en 17, con el criterio de no alejar tanto que no se leyeran
+        // los nombres de las calles. Era demasiado estricto: medido sobre el
+        // plano, 141 manzanas de tamaño corriente -2.402 parcelas entre 16 y
+        // 17, y 1.027 más entre 15 y 16- quedaban sin mostrarse completas.
+        // Casos como una manzana de 16 parcelas que necesita zoom 16,8: se
+        // perdía por dos décimas.
+        //
+        // A zoom 15 y 16 las calles se siguen leyendo, así que el motivo
+        // original no se sostenía en ese rango. Con 15 quedan afuera solo 43
+        // manzanas, las genuinamente enormes de zona rural, donde alejarse
+        // hasta abarcarlas sí dejaría la parcela como un punto invisible.
+        // Esas igual se pintan de azul: si el operador se aleja, las ve.
+        // ------------------------------------------------------------------
+        const ZOOM_MINIMO_LEGIBLE = 15;
 
         const indiceManzanas = new Map();
         let manzanaResaltada = [];
@@ -472,6 +487,28 @@
             let objetivo = boundsParcela;
 
             if (grupo && grupo.length > 1) {
+                // ------------------------------------------------------------
+                // RESALTAR Y ENCUADRAR SON DOS DECISIONES DISTINTAS
+                //
+                //   Antes las dos estaban juntas: la manzana se pintaba de azul
+                //   SOLO si además entraba entera y legible en pantalla. El
+                //   efecto era que 5.009 parcelas -el 28% del plano- no
+                //   resaltaban su manzana al seleccionarlas, y no por ser casos
+                //   raros: alcanzaba con que la manzana necesitara zoom 16,8
+                //   teniendo el umbral en 17. Manzanas de 16 o 22 parcelas,
+                //   completamente normales, quedaban sin pintar por dos
+                //   décimas de zoom.
+                //
+                //   Que la manzana no entre completa en pantalla no es motivo
+                //   para no pintarla: se ve la parte que entra, y si el
+                //   operador se aleja aparece el resto. Así que ahora se pinta
+                //   SIEMPRE, y el zoom decide únicamente qué se encuadra.
+                // ------------------------------------------------------------
+                for (const l of grupo) {
+                    if (l === layerParcela) continue;
+                    try { l.setStyle(ESTILO_MANZANA); manzanaResaltada.push(l); } catch (e) { /* ignorar */ }
+                }
+
                 const boundsManzana = L.latLngBounds([]);
                 for (const l of grupo) {
                     if (l.getBounds) boundsManzana.extend(l.getBounds());
@@ -482,10 +519,6 @@
                     if (zoomManzana >= ZOOM_MINIMO_LEGIBLE) {
                         // La manzana entra legible: se muestra completa.
                         objetivo = boundsManzana;
-                        for (const l of grupo) {
-                            if (l === layerParcela) continue;
-                            try { l.setStyle(ESTILO_MANZANA); manzanaResaltada.push(l); } catch (e) { /* ignorar */ }
-                        }
                     } else {
                         // Manzana demasiado grande (típicamente zona rural, donde
                         // "manzana" agrupa cientos de parcelas dispersas): se
@@ -493,6 +526,8 @@
                         // Un margen grande acá es contraproducente: sobre una
                         // parcela rural extensa alejaría tanto que no se leería
                         // ninguna calle, que es justo lo que se quiere evitar.
+                        //
+                        // La manzana igual quedó pintada más arriba.
                         objetivo = boundsParcela.pad(0.35);
                     }
                 }

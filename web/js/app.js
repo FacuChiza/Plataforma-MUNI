@@ -1,3 +1,25 @@
+/* ============================================================================
+   app.js  —  TODA LA LÓGICA DEL VISOR (mapa, ficha, plancheta, filtros)
+   ----------------------------------------------------------------------------
+   Es un archivo largo. Para ubicarte, sus partes principales (buscá el nombre):
+
+     MAPAS BASE ............. de dónde salen las calles del fondo, con respaldo
+     ÍNDICE... (x4) ......... búsquedas rápidas: por punto, por padrón, por manzana
+     encuadrarParcela() .... al hacer clic, muestra la parcela dentro de su manzana
+     showModalData() ....... arma la ficha que aparece en pantalla
+     procesarParcela() ..... decide qué mostrar (parcela simple o propiedad horizontal)
+     imprimirFicha() ....... la PLANCHETA catastral (el PDF con el mapa)
+     imprimirLibreDeuda() .. la constancia del Juzgado de Faltas
+     aplicarFiltros() ...... búsqueda por superficie / zona / barrio
+     paintMapFromFilter() .. pinta en el mapa el resultado de un filtro
+     loadData() ............ carga los archivos del plano al arrancar
+     const PLANO ........... LOS NOMBRES DE LOS ARCHIVOS DEL PLANO van acá
+     buscarPadron() ........ el buscador de arriba
+
+   Cada parte tiene su propio comentario explicando QUÉ hace y POR QUÉ así.
+   OJO: a qué servidor se le piden los datos NO se cambia acá, sino en config.js
+   ============================================================================ */
+
         // ====================================================================
         // MAPAS BASE
         // --------------------------------------------------------------------

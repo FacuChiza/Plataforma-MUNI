@@ -23,6 +23,14 @@
 //
 //   Ver docs/conexion-con-la-base.md para el detalle de qué campo sale de qué
 //   vista y qué falta confirmar contra la base real.
+//
+// LO QUE ATIENDE ESTE SERVIDOR (buscá "app.get" para saltar a cada uno)
+//   /                 sirve el visor (la web de la carpeta web/)
+//   /version /health  para chequear qué versión corre y si la base responde
+//   /api/catastro     la ficha de UNA parcela: dueño, superficie, deuda, etc.
+//   /api/filtrar      búsqueda por superficie / zona / barrio (los filtros)
+//   /api/opciones     las listas de zonas y barrios que existen en la base
+//   /api/superficie   /api/edificacion   búsquedas sueltas más viejas
 // ============================================================================
 
 require('dotenv').config(); // Carga variables desde .env (no versionado en git)

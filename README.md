@@ -122,6 +122,29 @@ Dejar en `false` en el servidor.
 
 ---
 
+## ¿Querés cambiar algo? Dónde tocar
+
+El mapa rápido para no perderse. Cada archivo tiene arriba un comentario que
+explica qué hace.
+
+| Si querés cambiar…                          | Andá a…                                            |
+|---------------------------------------------|----------------------------------------------------|
+| El diseño, colores o textos de la pantalla  | `web/index.html` y `web/css/app.css`               |
+| Los colores de las parcelas en el mapa      | `web/js/app.js` → constantes `ESTILO_*` (arriba)   |
+| La **plancheta** catastral (el PDF)         | `web/js/app.js` → función `imprimirFicha()`        |
+| El **libre de deuda** del Juzgado           | `web/js/app.js` → función `imprimirLibreDeuda()`   |
+| Los **filtros** (superficie, zona, barrio)  | `web/js/app.js` → `aplicarFiltros()` + `server.js` → `/api/filtrar` |
+| Qué datos trae la ficha de una parcela      | `servidor/server.js` → `/api/catastro`             |
+| **Cargar un plano nuevo** con más parcelas  | `web/js/app.js` → const `PLANO`, y `docs/actualizar-el-plano.md` |
+| A qué base de datos se conecta              | `servidor/.env` (se edita con `CONFIGURAR.bat`)    |
+| A qué servidor le pide los datos el frente  | `web/js/config.js`                                 |
+
+**Regla de oro del proyecto:** la forma de las parcelas sale de los archivos
+GeoJSON (`web/datos/`). Todo lo demás —dueño, superficie, deuda, zona— sale de
+la base municipal, en vivo. Por eso el mapa se ve sin conexión y las fichas no.
+
+---
+
 ## Estructura
 
 ```

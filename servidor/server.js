@@ -362,7 +362,7 @@ app.use(compression());
 // con la API corriendo dentro de la Municipalidad). Sin exponerla, el visor no
 // puede avisar que los datos no son reales.
 app.use((req, res, next) => {
-    res.setHeader('Access-Control-Expose-Headers', 'X-Datos-De-Prueba');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Datos-De-Prueba, X-Resultado-Recortado');
     next();
 });
 
@@ -721,7 +721,9 @@ app.get('/api/filtrar', async (req, res) => {
             // Sin este aviso, una búsqueda sin conexión devuelve superficies
             // inventadas con la misma cara que las reales.
             res.setHeader('X-Datos-De-Prueba', 'true');
-            return res.json(filtrarDePrueba(criterios));
+            const dePrueba = filtrarDePrueba(criterios);
+            if (dePrueba.length >= MAX_ROWS) res.setHeader('X-Resultado-Recortado', String(MAX_ROWS));
+            return res.json(dePrueba);
         }
         return res.status(503).json({ error: 'Base de datos municipal no disponible en este momento.' });
     }
@@ -837,6 +839,23 @@ app.get('/api/filtrar', async (req, res) => {
         // que adivinar.
         console.log(`🔎 Filtro: ${resultado.recordset.length} parcelas en ${ms} ms` +
                     (ms > 3000 ? '  ⚠️ LENTO' : ''));
+
+        // --------------------------------------------------------------------
+        // AVISO DE RESULTADO RECORTADO
+        //   La consulta lleva TOP (@maxRows) como cota de seguridad. Si la
+        //   busqueda encuentra mas parcelas que ese tope, se devuelven solo las
+        //   primeras, y hasta ahora eso no se avisaba en ningun lado: el
+        //   operador veia una lista completa y un mapa al que le faltaban
+        //   parcelas, sin manera de saber que habia mas.
+        //
+        //   Cuando la cantidad devuelta es exactamente el tope, es casi seguro
+        //   que quedaron parcelas afuera. Se avisa por cabecera para que el
+        //   visor lo diga en pantalla.
+        // --------------------------------------------------------------------
+        if (resultado.recordset.length >= MAX_ROWS) {
+            res.setHeader('X-Resultado-Recortado', String(MAX_ROWS));
+            console.log(`   ⚠️ Se alcanzo el tope de ${MAX_ROWS} parcelas: hay mas que no se devolvieron.`);
+        }
 
         res.json(resultado.recordset);
 

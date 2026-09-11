@@ -38,6 +38,12 @@ npm-debug.log*
 web/datos-optimizados/
 web/datos-originales-backup/
 
+# --- Informes generados -----------------------------------------------------
+# herramientas/revisar-plano.js --comparar deja aca los listados de padrones
+# que faltan dibujar. Son datos del padron municipal: no van a un repositorio
+# publico. Se regeneran corriendo la herramienta de nuevo.
+informes/
+
 # --- Carpeta de material sin clasificar -------------------------------------
 # Archivos apartados a la espera de una decision (ver _revisar/LEEME.md).
 _revisar/*

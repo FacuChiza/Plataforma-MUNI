@@ -109,8 +109,11 @@ Buscar un padrón conocido y abrir su ficha:
 - **Aparece un cartel amarillo "DATOS DE PRUEBA"** → está mostrando datos
   inventados; ver más abajo
 
-Otra forma: entrar a <http://localhost:8000/health>. Tiene que decir
+Otra forma: entrar a `/health` en el puerto que dice la ventana negra
+(por ejemplo <http://localhost:8001/health>). Tiene que decir
 `"database": "connected"`.
+
+No usar el 8000: ese es el del visor anterior.
 
 ---
 
@@ -152,7 +155,38 @@ pueden convivir.
 
 ### "El navegador no se abre solo"
 
-Abrirlo a mano y entrar a <http://localhost:8000>.
+Abrirlo a mano y entrar a `http://localhost:` seguido del **número de puerto que
+dice la ventana negra**, en el renglón `Puerto:`. Suele ser 8001.
+
+> **Ojo con el 8000.** Ese es el puerto del **visor anterior**. Si se entra ahí
+> se abre el de siempre, con los problemas de siempre, y parece que la
+> actualización no hubiera servido para nada. El número correcto es el que
+> figura en la ventana negra de este visor.
+
+### "El mapa se ve gris, no aparecen las calles"
+
+Las parcelas se dibujan bien pero el fondo con las calles queda vacío, y arriba
+del mapa aparece un cartel amarillo avisándolo.
+
+**No falta ninguna clave ni ninguna licencia.** Los mapas de calles que usa el
+visor son gratuitos y no piden cuenta de nada. Lo que pasa es que la red de la
+Municipalidad no está dejando salir a los servidores que entregan esas
+imágenes.
+
+El visor prueba tres proveedores distintos al arrancar y se queda con el
+primero que conteste, así que si el cartel aparece es porque ninguno de los
+tres responde. Hay que pedirle a sistemas que permitan el acceso a:
+
+```
+server.arcgisonline.com
+```
+
+Con ese alcanza. Si además se puede habilitar `basemaps.cartocdn.com`, queda un
+segundo proveedor de respaldo, pero no es imprescindible.
+
+Mientras tanto el visor **se sigue pudiendo usar**: las parcelas, las
+búsquedas, los filtros y las planchetas no dependen de internet, salen de
+archivos que están en la propia computadora.
 
 ---
 

@@ -91,34 +91,66 @@ Agregar ""
 
 # --- 4. El servidor esta corriendo? ------------------------------------------
 Agregar "4. SERVIDOR"
-try {
-    $r = Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 5
-    Agregar "   Responde en http://localhost:8000"
-    Agregar "   $($r.Content)"
-} catch {
-    Agregar "   No responde (el visor no esta abierto en este momento)."
+# INICIAR.bat elige el primer puerto libre de esta lista, asi que hay que
+# probarlos todos: no hay un numero fijo. El 8000 se prueba aparte y solo para
+# avisar, porque ese es el del VISOR ANTERIOR.
+$encontrado = $false
+foreach ($p in @(8001, 8002, 8003, 8010, 8020, 8080, 8090, 3000, 3001, 5000)) {
+    try {
+        $r = Invoke-WebRequest -Uri "http://localhost:$p/health" -UseBasicParsing -TimeoutSec 3
+        Agregar "   Responde en http://localhost:$p"
+        Agregar "   $($r.Content)"
+        $encontrado = $true
+        break
+    } catch { }
+}
+if (-not $encontrado) {
+    Agregar "   No responde en ningun puerto (el visor no esta abierto en este momento)."
     Agregar "   Para incluir este dato: abrir INICIAR.bat y volver a ejecutar el diagnostico."
 }
+
+try {
+    Invoke-WebRequest -Uri "http://localhost:8000/" -UseBasicParsing -TimeoutSec 3 | Out-Null
+    Agregar ""
+    Agregar "   Nota: el puerto 8000 tambien esta ocupado. Ese es el VISOR ANTERIOR."
+    Agregar "   Es correcto que siga funcionando. Pero si al abrir localhost:8000 se ve"
+    Agregar "   el visor de siempre, no es que la actualizacion no haya servido: hay que"
+    Agregar "   entrar al puerto que dice la ventana negra de este visor."
+} catch { }
 Agregar ""
 
 # --- 5. Los servidores de mapas responden desde esta red? --------------------
 # Un firewall municipal puede dejar pasar unos dominios y bloquear otros.
 Agregar "5. SERVIDORES DE MAPAS (desde esta red)"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+# Las teselas de prueba caen sobre Villa de Merlo. Ninguno de estos servicios
+# pide clave ni cuenta: si alguno FALLA, es que esta red no lo deja salir.
 $mapas = [ordered]@{
-    "CARTO (mapa de calles, el que usa ahora)" = "https://a.basemaps.cartocdn.com/rastertiles/voyager/13/2680/4890.png"
-    "Esri (topografia)"                        = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/13/4890/2680"
-    "Google (satelital)"                       = "https://mt1.google.com/vt/lyrs=s&x=2680&y=4890&z=13"
-    "OpenStreetMap (el que fallaba)"           = "https://a.tile.openstreetmap.org/13/2680/4890.png"
+    "Esri (calles, el que usa primero)"  = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/13/4872/2616"
+    "CARTO (calles, primer respaldo)"    = "https://a.basemaps.cartocdn.com/rastertiles/voyager/13/2616/4872.png"
+    "OpenStreetMap (ultimo respaldo)"    = "https://a.tile.openstreetmap.org/13/2616/4872.png"
+    "Esri (topografia)"                  = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/13/4872/2616"
+    "Google (satelital)"                 = "https://mt1.google.com/vt/lyrs=s&x=2616&y=4872&z=13"
 }
+$callesOk = $false
 foreach ($m in $mapas.GetEnumerator()) {
     try {
         $res = Invoke-WebRequest -Uri $m.Value -UseBasicParsing -TimeoutSec 10
         Agregar "   OK ($($res.StatusCode))   $($m.Key)"
+        if ($m.Key -like "*calles*") { $callesOk = $true }
     } catch {
         $codigo = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { "sin respuesta" }
         Agregar "   FALLA ($codigo)   $($m.Key)"
     }
+}
+if (-not $callesOk) {
+    Agregar ""
+    Agregar "   >>> Ningun mapa de calles responde desde esta red."
+    Agregar "       Por eso el mapa se ve gris. NO falta ninguna clave ni licencia:"
+    Agregar "       hay que pedirle a sistemas que permita el acceso a"
+    Agregar "       server.arcgisonline.com"
+    Agregar "       Las parcelas, los filtros y las planchetas funcionan igual:"
+    Agregar "       salen de archivos de esta misma computadora."
 }
 Agregar ""
 

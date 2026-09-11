@@ -1,6 +1,6 @@
         /* --- ESTILOS GLOBALES --- */
         body, html { height: 100%; margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
-        #map { height: calc(100vh - 64px); width: 100%; background: #f8fafc; }
+        #map { height: calc(100vh - 64px); width: 100%; background: #f8fafc; position: relative; }
         
         /* ETIQUETAS DINÁMICAS: Centradas matemáticamente sobre sus coordenadas */
         .parcel-label, .manzana-label, .barrio-label { 

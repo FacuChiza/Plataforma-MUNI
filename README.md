@@ -42,7 +42,8 @@ correr esto primero.**
 ### Saber qué versión está corriendo
 
 La versión figura **abajo a la derecha del mapa**, al lado del sistema de
-coordenadas. También al arrancar el servidor, y en <http://localhost:8000/version>.
+coordenadas. También al arrancar el servidor, y en `/version` del puerto en el que esté
+corriendo (el que anuncia la ventana negra, normalmente el 8001).
 
 Si algo que ya se corrigió sigue fallando, lo primero es mirar ese número.
 
@@ -84,8 +85,8 @@ cd servidor
 node server.js
 ```
 
-Abrir <http://localhost:8000>. El estado de la conexión se puede consultar en
-`/health`.
+Abrir `http://localhost:` seguido del puerto que anuncia el servidor al
+arrancar. El estado de la conexión se puede consultar en `/health`.
 
 ### Lo único que no viene en el repositorio
 
@@ -152,12 +153,34 @@ herramientas/            diagnóstico y verificación
   consultas-pendientes.sql    preguntas abiertas, para correr en la muni
   optimizar-datos.js          achica los GeoJSON del mes
   comparar-datos.js           verifica que optimizar no cambie nada
+  revisar-plano.js            revisa un plano nuevo antes de ponerlo en uso
   linea-base.json             referencia del test de equivalencia
 
 docs/                    documentación
   instalacion-en-la-muni.md   guía paso a paso para quien no programa
+  actualizar-el-plano.md      cómo cargar parcelas nuevas en el visor
   conexion-con-la-base.md     qué campo sale de qué vista y qué falta confirmar
 ```
+
+### Actualizar el plano con parcelas nuevas
+
+El procedimiento completo está en
+**[docs/actualizar-el-plano.md](docs/actualizar-el-plano.md)**. En resumen son
+tres pasos: revisar el archivo, copiarlo a `web/datos/` y cambiar su nombre en
+el bloque `ARCHIVOS DEL PLANO` de `web/js/app.js`, que es el único lugar del
+programa donde figuran esos nombres.
+
+La revisión previa no es opcional:
+
+```bash
+node herramientas/revisar-plano.js "C:\ruta\PlanoNuevo.json"
+node herramientas/revisar-plano.js "C:\ruta\PlanoNuevo.json" --comparar
+```
+
+Avisa de polígonos sin padrón, padrones repetidos o mal escritos, geometrías
+rotas y archivos exportados en el sistema de coordenadas equivocado. Con
+`--comparar` además dice **qué padrones existen en la base pero no están
+dibujados**: son las parcelas que después "no se pintan" al filtrar.
 
 ### Actualizar los datos del mes
 

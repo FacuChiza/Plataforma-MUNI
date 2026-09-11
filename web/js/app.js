@@ -33,16 +33,33 @@
         // imagenes, el visor pasa solo al siguiente y lo deja anotado en la
         // consola. Con que uno de los tres responda, el mapa se ve.
         // --------------------------------------------------------------------
+        // --------------------------------------------------------------------
+        // ORDEN DE LA LISTA
+        //   Primero Esri. Ninguno de estos servicios pide clave ni cuenta: se
+        //   comprobó que los tres entregan las imágenes sin credencial alguna,
+        //   así que cuando el mapa no aparece no es que "falte una API", es que
+        //   la red desde la que se está usando no deja salir a ese dominio.
+        //
+        //   Esri sirve las imágenes desde un único servidor propio
+        //   (server.arcgisonline.com). CARTO las sirve desde una red de
+        //   distribución de contenido (cartocdn.com), y los filtros de red
+        //   corporativos suelen bloquear ese tipo de dominios por categoría, sin
+        //   que nadie lo haya decidido para este caso en particular. En la
+        //   Municipalidad el mapa no aparecía justamente por eso.
+        //
+        //   OpenStreetMap va último porque bloquea por política de uso, no por
+        //   red: es el que más chances tiene de fallar en cualquier lado.
+        // --------------------------------------------------------------------
         const PROVEEDORES_CALLE = [
-            {
-                nombre: 'CARTO',
-                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                opciones: { subdomains: 'abcd', attribution: ATRIB_OSM + ' &copy; <a href="https://carto.com/attributions">CARTO</a>' }
-            },
             {
                 nombre: 'Esri',
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
                 opciones: { attribution: 'Esri' }
+            },
+            {
+                nombre: 'CARTO',
+                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                opciones: { subdomains: 'abcd', attribution: ATRIB_OSM + ' &copy; <a href="https://carto.com/attributions">CARTO</a>' }
             },
             {
                 nombre: 'OpenStreetMap',
@@ -63,21 +80,109 @@
             let fallas = 0;
             capa.on('tileerror', () => {
                 fallas++;
-                if (fallas === 4 && indice + 1 < PROVEEDORES_CALLE.length) {
-                    console.warn(`⚠️ El mapa de calles de ${p.nombre} no responde en esta red. Pasando a ${PROVEEDORES_CALLE[indice + 1].nombre}.`);
-                    const siguiente = crearCapaCalles(indice + 1);
-                    if (map.hasLayer(capa)) {
-                        map.removeLayer(capa);
-                        siguiente.addTo(map);
-                        siguiente.bringToBack();
-                    }
-                    proveedorActual = indice + 1;
-                    window.__capaCalles = siguiente;
-                }
+                if (fallas === 4 && indice === proveedorActual) usarProveedor(indice + 1);
             });
 
             capa.on('load', () => { fallas = 0; });
             return capa;
+        }
+
+        /** Cambia el mapa de calles al proveedor indicado. */
+        function usarProveedor(indice) {
+            if (indice >= PROVEEDORES_CALLE.length) { avisarSinMapaBase(); return; }
+
+            const anterior = window.__capaCalles;
+            const nueva = crearCapaCalles(indice);
+            proveedorActual = indice;
+            window.__capaCalles = nueva;
+            console.log(`🗺️ Mapa de calles: ${PROVEEDORES_CALLE[indice].nombre}`);
+
+            if (anterior && map.hasLayer(anterior)) {
+                map.removeLayer(anterior);
+                nueva.addTo(map);
+                nueva.bringToBack();
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // COMPROBACION AL ARRANCAR
+        //
+        // Esperar a que fallen las imágenes para cambiar de proveedor funciona,
+        // pero mientras tanto el usuario ve el mapa cubierto de recuadros de
+        // error, y si el bloqueo de la red hace que las consultas queden
+        // colgadas en vez de fallar rápido, el aviso de error puede no llegar
+        // nunca y el mapa se queda gris para siempre. Eso es lo que se veía en
+        // la Municipalidad.
+        //
+        // Por eso, al abrir el visor se pide UNA imagen de prueba a cada
+        // proveedor, las tres al mismo tiempo, y se usa el primero de la lista
+        // que haya contestado. Si ninguno contesta en 6 segundos, se avisa en
+        // pantalla en vez de dejar un mapa vacío sin explicación.
+        // --------------------------------------------------------------------
+        const TESELA_PRUEBA = { z: 13, x: 2616, y: 4872 };   // cae sobre Villa de Merlo
+
+        function urlDePrueba(p) {
+            const sub = (p.opciones && p.opciones.subdomains) ? p.opciones.subdomains[0] : 'a';
+            return p.url
+                .replace('{s}', sub)
+                .replace('{z}', TESELA_PRUEBA.z)
+                .replace('{x}', TESELA_PRUEBA.x)
+                .replace('{y}', TESELA_PRUEBA.y)
+                .replace('{r}', '');
+        }
+
+        function proveedorResponde(p) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                let resuelto = false;
+                const terminar = (ok) => { if (!resuelto) { resuelto = true; resolve(ok); } };
+                const plazo = setTimeout(() => terminar(false), 6000);
+                img.onload  = () => { clearTimeout(plazo); terminar(true); };
+                img.onerror = () => { clearTimeout(plazo); terminar(false); };
+                img.src = urlDePrueba(p);
+            });
+        }
+
+        async function elegirProveedorQueResponda() {
+            const respuestas = await Promise.all(PROVEEDORES_CALLE.map(proveedorResponde));
+
+            PROVEEDORES_CALLE.forEach((p, i) => {
+                if (!respuestas[i]) console.warn(`⚠️ El mapa de ${p.nombre} no responde desde esta red.`);
+            });
+
+            const elegido = respuestas.findIndex(Boolean);
+            if (elegido === -1) { avisarSinMapaBase(); return; }
+            if (elegido !== proveedorActual) usarProveedor(elegido);
+            else console.log(`🗺️ Mapa de calles: ${PROVEEDORES_CALLE[elegido].nombre}`);
+        }
+
+        /**
+         * Ningún proveedor responde. El visor sigue siendo utilizable -las
+         * parcelas son archivos locales y se dibujan igual-, pero sin las
+         * calles de fondo cuesta ubicarse, así que hay que decirlo: un mapa
+         * gris sin explicación parece un programa roto.
+         */
+        function avisarSinMapaBase() {
+            console.error('❌ Ningún proveedor de mapa de calles responde desde esta red.');
+            if (document.getElementById('aviso-sin-mapa')) return;
+
+            const aviso = document.createElement('div');
+            aviso.id = 'aviso-sin-mapa';
+            aviso.style.cssText = 'position:absolute; top:12px; left:50%; transform:translateX(-50%);' +
+                'z-index:900; max-width:520px; background:#fef3c7; border:1px solid #f59e0b;' +
+                'color:#78350f; padding:10px 14px; border-radius:8px; font-size:12px;' +
+                'line-height:1.5; box-shadow:0 2px 8px rgba(0,0,0,.15);';
+            aviso.innerHTML =
+                '<b>No se pudo cargar el mapa de calles.</b><br>' +
+                'Las parcelas se ven igual, pero el fondo con las calles queda vacío. ' +
+                'La causa habitual es que la red de la Municipalidad no deje salir a los ' +
+                'servidores de mapas. Para solucionarlo hay que pedirle a sistemas que ' +
+                'permitan el acceso a <b>server.arcgisonline.com</b>.' +
+                '<span style="float:right; cursor:pointer; font-weight:700; margin-left:10px;" ' +
+                'onclick="this.parentNode.remove()">✕</span>';
+
+            const contenedor = document.getElementById('map');
+            if (contenedor) contenedor.appendChild(aviso);
         }
 
         const osm = crearCapaCalles(0);
@@ -105,6 +210,11 @@
         }).setView([-32.3435, -65.0112], 15);
         
         L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        // Se comprueba cuál de los proveedores de mapa de calles responde desde
+        // esta red y se usa el primero que conteste. No hace esperar a nada: el
+        // visor sigue cargando mientras tanto.
+        elegirProveedorQueResponda();
 
         const geojsonLayer = L.featureGroup().addTo(map); 
         const labelsLayer = L.layerGroup(); 
@@ -256,6 +366,90 @@
                 try { l.setStyle(ESTILO_BASE); } catch (e) { /* capa ya removida */ }
             }
             manzanaResaltada = [];
+        }
+
+        // ====================================================================
+        // ÍNDICE DE PARCELAS POR PADRÓN
+        // --------------------------------------------------------------------
+        // POR QUE EXISTE
+        //   Pintar el resultado de un filtro consistía en recorrer las 17.614
+        //   parcelas y llamar setStyle en todas: en las que coincidían para
+        //   resaltarlas, y en las demás para devolverlas al estilo normal. Con
+        //   un filtro amplio -por ejemplo terrenos de 1000 a 1500 m2, que son
+        //   miles- eso son decenas de miles de repintados encadenados, todos en
+        //   el mismo bloque de código. El navegador no puede atender nada
+        //   mientras tanto: la pantalla se congela y parece que el programa se
+        //   colgó.
+        //
+        //   Con este índice, pintar toca únicamente las parcelas involucradas:
+        //   las que hay que resaltar (se buscan por padrón, directo) y las que
+        //   quedaron pintadas de la búsqueda anterior (se anotan al pintarlas).
+        //   El costo pasa a depender de cuántas parcelas cambian de color, no
+        //   de cuántas hay en el municipio.
+        //
+        //   Se arma mientras Leaflet crea las capas, igual que el de manzanas,
+        //   así que no cuesta un recorrido extra al abrir el visor.
+        //
+        // POR QUE UNA LISTA POR PADRON Y NO UNA CAPA
+        //   Un mismo padrón puede tener más de un polígono (propiedad
+        //   horizontal, parcelas divididas). Si se guardara una sola capa por
+        //   padrón, esas parcelas quedarían a medio pintar.
+        // ====================================================================
+        const indicePadrones = new Map();
+        let parcelasPintadas = [];
+
+        // Resultado del último pintado, para poder explicarlo en pantalla:
+        // cuántas se pintaron y qué padrones no tienen dibujo en el plano.
+        let ultimoPintado = { pintadas: 0, sinDibujo: [] };
+
+        // Qué lista de parcelas está pintada en este momento.
+        //
+        // Sirve para no repintar lo mismo dos veces. Al hacer la búsqueda el
+        // resultado ya se pinta; el botón "Pintar en Mapa" volvía a pintar
+        // exactamente lo mismo, sin que cambiara nada en pantalla. El cálculo
+        // en sí es barato (unos 7 ms para 2.100 parcelas), pero obliga a
+        // Leaflet a redibujar el plano completo, y eso en las computadoras de
+        // la Municipalidad se nota. Trabajo de más que no aporta nada.
+        let datosPintados = null;
+
+        /**
+         * Deja un padrón en una forma comparable.
+         *
+         * POR QUE NO ALCANZA CON trim() Y MAYUSCULAS
+         *   El mismo padrón no siempre está escrito igual en los dos lados. En
+         *   el plano figura como `13-958934`, y la base puede devolverlo sin el
+         *   guión, con espacios de más o con ceros adelante. Comparando el texto
+         *   tal cual, esos casos no coinciden con ninguna parcela y el visor no
+         *   las pinta, aunque la parcela esté perfectamente cargada.
+         *
+         *   Por eso se compara solo por letras y números. Se verificó sobre el
+         *   plano completo que esto NO junta dos padrones distintos en uno: las
+         *   17.134 claves siguen siendo 17.134 después de normalizar. O sea que
+         *   tolera diferencias de escritura sin volverse ambiguo.
+         */
+        function normalizarPadron(valor) {
+            return String(valor == null ? '' : valor).toUpperCase().replace(/[^A-Z0-9]/g, '');
+        }
+
+        function clavePadron(props) {
+            return normalizarPadron((props && (props.NRO_RENTA || props.PADRON)) || '');
+        }
+
+        function registrarEnPadron(feature, layer) {
+            const clave = clavePadron(feature.properties);
+            if (!clave) return;
+            let grupo = indicePadrones.get(clave);
+            if (!grupo) { grupo = []; indicePadrones.set(clave, grupo); }
+            grupo.push(layer);
+        }
+
+        /** Devuelve al estilo normal solo lo que había quedado pintado. */
+        function limpiarPintadoFiltro() {
+            for (const l of parcelasPintadas) {
+                try { l.setStyle(ESTILO_BASE); } catch (e) { /* capa ya removida */ }
+            }
+            parcelasPintadas = [];
+            datosPintados = null;
         }
 
         /**
@@ -925,17 +1119,27 @@
         flex: 1;
     }
     .ident-celda:last-child { border-right: none; }
-    .ident-celda.principal { background: var(--institucional); color: #fff; flex: 0 0 27%; }
+    /* EL PADRON NO LLEVA FONDO DE COLOR
+       Es el dato que más se busca en la hoja, así que la primera versión lo
+       destacaba con el verde institucional de fondo y el número en blanco. En
+       pantalla se veía bien, pero estas planchetas se imprimen casi siempre en
+       blanco y negro: ahí el verde se convierte en una mancha gris oscura y el
+       número, que era blanco, queda ilegible.
+       Se destaca con el tamaño y el grosor de la tipografía, que se ven igual
+       en cualquier impresora y no dependen del color. */
+    .ident-celda.principal { flex: 0 0 27%; }
     .ident-celda .et {
         font-size: 7px; text-transform: uppercase; letter-spacing: .11em;
         display: block; margin-bottom: 2px; color: var(--tenue);
     }
-    .ident-celda.principal .et { color: rgba(255,255,255,.72); }
     .ident-celda .vl { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
     /* La nomenclatura tiene 22 digitos: se achica lo justo para no partirse. */
     .ident-celda.nomenclatura { flex: 0 0 24%; }
     .ident-celda.nomenclatura .vl { font-size: 11px; letter-spacing: -.01em; }
-    .ident-celda.principal .vl { font-size: 16px; letter-spacing: .01em; }
+    .ident-celda.principal .vl {
+        font-size: 17px; letter-spacing: .01em;
+        font-weight: 800; color: var(--institucional);
+    }
 
     /* ---------- Cuerpo en dos columnas ---------- */
     .cuerpo { display: flex; gap: 11px; align-items: flex-start; }
@@ -1478,11 +1682,36 @@ ${p._DEMO ? `
                 tbody.innerHTML = rowsHtml;
             }
 
+            // El cartel de "cargando" se apaga SIEMPRE, tanto si el pintado
+            // sale bien como si falla. Antes se encendía y no se apagaba
+            // nunca: aunque el pintado hubiera terminado, la pantalla quedaba
+            // tapada por el cartel y el visor parecía colgado.
             const btnPaint = document.getElementById('btn-paint-map');
             btnPaint.onclick = () => {
                 closeFilterModal();
-               document.getElementById('loader').style.display = 'flex';
-                setTimeout(() => paintMapFromFilter(data, configPintado, tipoFiltro), 100);
+                const cartel = document.getElementById('loader');
+                cartel.style.display = 'flex';
+
+                // El pintado se hace en el siguiente ciclo para que el
+                // navegador alcance a dibujar el cartel antes de ponerse a
+                // trabajar. Si se hiciera acá mismo, no se vería.
+                setTimeout(() => {
+                    try {
+                        // Al hacer la búsqueda ya se pintó este mismo resultado.
+                        // Volver a pintarlo no cambia nada en pantalla y cuesta
+                        // otro segundo de mapa trabado, así que solo se pinta si
+                        // por algo dejó de estarlo (por ejemplo, si se limpiaron
+                        // los filtros con el listado abierto).
+                        if (datosPintados !== data) {
+                            paintMapFromFilter(data, configPintado);
+                        }
+                        encuadrarPintado();
+                    } catch (error) {
+                        console.error('❌ No se pudieron pintar las parcelas del filtro:', error);
+                    } finally {
+                        cartel.style.display = 'none';
+                    }
+                }, 50);
             };
 
             const modal = document.getElementById('filter-table-modal');
@@ -1493,18 +1722,12 @@ ${p._DEMO ? `
         /**
          * Pinta en el mapa las parcelas que devolvió un filtro.
          *
-         * OJO con el recorrido: geojsonLayer es un featureGroup que contiene la
-         * capa GeoJSON, y es esa capa la que contiene las 17.614 parcelas. Un
-         * eachLayer directo devuelve el grupo intermedio, que no tiene
-         * .feature, y rompe con "cannot read properties of undefined". Hay que
-         * bajar en profundidad, igual que hace el buscador.
+         * Solo toca las parcelas que cambian de color: las que hay que resaltar
+         * ahora -que se ubican por el índice de padrones, sin recorrer nada- y
+         * las que habían quedado pintadas de la búsqueda anterior. Ver el
+         * comentario del índice de padrones para el motivo.
          */
         function paintMapFromFilter(data, config) {
-            const padrones = new Set();
-            for (const fila of data) {
-                if (fila.PADRON) padrones.add(String(fila.PADRON).trim().toUpperCase());
-            }
-
             const resaltado = {
                 color: config.color || '#7c3aed',
                 fillColor: config.fillColor || '#7c3aed',
@@ -1512,23 +1735,167 @@ ${p._DEMO ? `
                 fillOpacity: config.fillOpacity || 0.5
             };
 
-            let pintadas = 0;
+            // Si por lo que sea el índice no llegó a armarse -el GeoJSON de
+            // parcelas no cargó, o cambiaron los nombres de los campos-, se
+            // recorre como se hacía antes. Es lento, pero pintar despacio es
+            // mejor que no pintar.
+            if (indicePadrones.size === 0) {
+                return pintarRecorriendoTodo(data, resaltado);
+            }
+
+            limpiarPintadoFiltro();
+
+            const pintadas = [];
+            const sinDibujo = [];          // padrones que la base trae pero el plano no tiene
+
+            for (const fila of data) {
+                const clave = normalizarPadron(fila.PADRON);
+                if (!clave) continue;
+                const capas = indicePadrones.get(clave);
+                if (!capas) { sinDibujo.push(fila.PADRON); continue; }
+                for (const capa of capas) {
+                    if (!capa.setStyle) continue;
+                    capa.setStyle(resaltado);
+                    pintadas.push(capa);
+                }
+            }
+
+            parcelasPintadas = pintadas;
+            ultimoPintado = { pintadas: pintadas.length, sinDibujo: sinDibujo };
+            datosPintados = data;
+
+            // Si la base devuelve parcelas que el plano no tiene dibujadas, hay
+            // que decirlo: si no, el operador ve una lista de 300 resultados y
+            // 280 parcelas pintadas, y no tiene forma de saber por qué faltan.
+            if (sinDibujo.length > 0) {
+                console.warn(
+                    `⚠️ ${sinDibujo.length} parcela(s) de la búsqueda no están dibujadas en el plano ` +
+                    `y por eso no se pintan. Padrones: ${sinDibujo.slice(0, 20).join(', ')}` +
+                    (sinDibujo.length > 20 ? ` … y ${sinDibujo.length - 20} más` : '')
+                );
+            }
+
+            return pintadas.length;
+        }
+
+        /**
+         * Camino de respaldo: recorre las capas una por una.
+         *
+         * OJO con el recorrido: geojsonLayer es un featureGroup que contiene la
+         * capa GeoJSON, y es esa capa la que contiene las parcelas. Un
+         * eachLayer directo devuelve el grupo intermedio, que no tiene
+         * .feature, y rompe con "cannot read properties of undefined". Hay que
+         * bajar en profundidad, igual que hace el buscador.
+         */
+        function pintarRecorriendoTodo(data, resaltado) {
+            const padrones = new Set();
+            for (const fila of data) {
+                const clave = normalizarPadron(fila.PADRON);
+                if (clave) padrones.add(clave);
+            }
+
+            const pintadas = [];
             geojsonLayer.eachLayer(function recorrer(capa) {
                 if (capa.eachLayer) { capa.eachLayer(recorrer); return; }
                 if (!capa.feature || !capa.setStyle) return;
 
-                const props = capa.feature.properties || {};
-                const renta = String(props.NRO_RENTA || props.PADRON || '').trim().toUpperCase();
-
+                const renta = clavePadron(capa.feature.properties);
                 if (renta && padrones.has(renta)) {
                     capa.setStyle(resaltado);
-                    pintadas++;
+                    pintadas.push(capa);
                 } else {
                     capa.setStyle(ESTILO_BASE);
                 }
             });
 
-            return pintadas;
+            parcelasPintadas = pintadas;
+            ultimoPintado = { pintadas: pintadas.length, sinDibujo: [] };
+            datosPintados = data;
+            return pintadas.length;
+        }
+
+        // ====================================================================
+        // ENCUADRE DEL RESULTADO DE UN FILTRO
+        // --------------------------------------------------------------------
+        // POR QUE HAY UN ZOOM MINIMO
+        //   Encuadrar el resultado de un filtro parece inofensivo, pero cuando
+        //   las parcelas que coinciden están repartidas por todo el municipio,
+        //   el encuadre tiene que alejar el mapa hasta ver Merlo entero, y a ese
+        //   zoom entran en pantalla las 17.614 parcelas a la vez.
+        //
+        //   Medido en una computadora de escritorio, ese salto de zoom bloquea
+        //   unos 150 ms contra los 50 ms del zoom normal de trabajo: el triple.
+        //   Y no es por una sola vez, que se aguantaría: el mapa QUEDA en ese
+        //   zoom, así que cada paneo y cada rueda del mouse siguen costando lo
+        //   mismo hasta que alguien vuelva a acercarse. En las computadoras de
+        //   la Municipalidad, bastante más lentas, eso es lo que se siente como
+        //   que el programa se trabó.
+        //
+        //   Es una de las dos cosas que el botón "Pintar en Mapa" hacía de más
+        //   respecto de simplemente cerrar el listado -la otra era repintar lo
+        //   que ya estaba pintado-, y por eso cerrar el listado se sentía bien
+        //   y el botón no.
+        //
+        //   Ahora se calcula de antemano a qué zoom habría que ir. Si queda por
+        //   debajo del mínimo, no se encuadra: el resultado está desparramado,
+        //   y en ese caso acercarse a "todo" no muestra nada útil de todas
+        //   formas. El pintado ya está hecho y se ve al navegar el mapa.
+        // ====================================================================
+        const ZOOM_MINIMO_SEGURO = 14;
+
+        /**
+         * Muestra debajo del panel de filtros por qué el mapa puede tener menos
+         * parcelas pintadas que las que dice la lista. Con la lista vacía, se
+         * oculta.
+         */
+        function mostrarAvisosDelFiltro(avisos) {
+            // Se muestran en dos lugares a propósito: en el modal de resultados,
+            // que es donde el operador está parado cuando decide pintar, y en el
+            // panel lateral, para que sigan a mano después de cerrarlo. El panel
+            // solo se colapsa, así que por sí solo no alcanza.
+            const cajas = [
+                document.getElementById('filtro-avisos'),
+                document.getElementById('filtro-avisos-modal')
+            ].filter(Boolean);
+
+            const vacio = !avisos || avisos.length === 0;
+            const html = vacio ? '' : avisos.map((texto) => `
+                <div class="flex gap-2 items-start bg-amber-50 border border-amber-300 text-amber-900
+                            text-[10px] leading-snug font-semibold normal-case px-3 py-2 rounded">
+                    <span class="material-icons text-[13px] leading-none mt-[1px]">info</span>
+                    <span>${texto}</span>
+                </div>`).join('');
+
+            for (const caja of cajas) {
+                caja.innerHTML = html;
+                caja.classList.toggle('hidden', vacio);
+            }
+        }
+
+        /**
+         * Acerca el mapa a lo que se acaba de pintar, si se puede hacer sin
+         * trabar el navegador. Devuelve true si encuadró.
+         */
+        function encuadrarPintado() {
+            if (parcelasPintadas.length === 0) return false;
+            try {
+                let limites = parcelasPintadas[0].getBounds();
+                for (let i = 1; i < parcelasPintadas.length; i++) {
+                    limites = limites.extend(parcelasPintadas[i].getBounds());
+                }
+
+                const zoomNecesario = map.getBoundsZoom(limites, false, L.point(40, 40));
+                if (zoomNecesario < ZOOM_MINIMO_SEGURO) {
+                    console.log('ℹ️ El resultado abarca casi todo el municipio: se deja el mapa como está para no trabar el visor.');
+                    return false;
+                }
+
+                map.fitBounds(limites, { padding: [40, 40] });
+                return true;
+            } catch (e) {
+                console.warn('No se pudo encuadrar el resultado del filtro:', e);
+                return false;
+            }
         }
 
         // ====================================================================
@@ -1635,6 +2002,11 @@ ${p._DEMO ? `
                 // inventada tiene exactamente la misma cara que una real.
                 const sonDePrueba = respuesta.headers.get('X-Datos-De-Prueba') === 'true';
 
+                // Si la búsqueda encontró más parcelas que el tope del
+                // servidor, solo llegaron las primeras. Sin este aviso, el mapa
+                // queda con parcelas sin pintar y parece un error del visor.
+                const tope = respuesta.headers.get('X-Resultado-Recortado');
+
                 const datos = await respuesta.json();
 
                 const resumen = document.getElementById('filtro-resumen');
@@ -1653,10 +2025,25 @@ ${p._DEMO ? `
                 if (datos.length > 0) {
                     const config = { color: '#7c3aed', fillColor: '#7c3aed', weight: 2, fillOpacity: 0.45 };
                     paintMapFromFilter(datos, config);
+
+                    // Qué pasó realmente con el pintado. Que la lista diga 300
+                    // y el mapa muestre 280 tiene una explicación concreta, y el
+                    // operador tiene que poder verla sin abrir la consola.
+                    const avisos = [];
+                    if (tope) {
+                        avisos.push(`Hay más de ${tope} parcelas que cumplen los criterios: se muestran las primeras ${tope}. Achicá el rango para verlas todas.`);
+                    }
+                    if (ultimoPintado.sinDibujo.length > 0) {
+                        avisos.push(`${ultimoPintado.sinDibujo.length} parcela${ultimoPintado.sinDibujo.length > 1 ? 's' : ''} de la lista no ${ultimoPintado.sinDibujo.length > 1 ? 'están dibujadas' : 'está dibujada'} en el plano, así que no se pinta${ultimoPintado.sinDibujo.length > 1 ? 'n' : ''}: figuran en la base pero les falta el polígono.`);
+                    }
+                    mostrarAvisosDelFiltro(avisos);
+
                     const encabezado = sonDePrueba
                         ? `⚠ DATOS DE PRUEBA — ${activos.join(' · ')}`
                         : `Búsqueda: ${activos.join(' · ')}`;
                     abrirModalResultados(encabezado, datos, 'SUP_TER', config, 'combinado');
+                } else {
+                    mostrarAvisosDelFiltro([]);
                 }
 
             } catch (error) {
@@ -1679,13 +2066,16 @@ ${p._DEMO ? `
 
             document.getElementById('filtro-resumen').classList.add('hidden');
             document.getElementById('filtros-activos').classList.add('hidden');
+            mostrarAvisosDelFiltro([]);
 
-            // Devuelve todas las parcelas a su estilo normal
+            // Devuelve a su estilo normal lo que estaba resaltado. Solo eso:
+            // recorrer las 17.614 parcelas para repintar las pocas que
+            // cambiaron congelaba la pantalla sin motivo.
             limpiarResaltadoManzana();
-            geojsonLayer.eachLayer(function restaurar(capa) {
-                if (capa.eachLayer) { capa.eachLayer(restaurar); return; }
-                if (capa.setStyle) capa.setStyle(ESTILO_BASE);
-            });
+            limpiarPintadoFiltro();
+            if (selectedLayer && selectedLayer.setStyle) {
+                try { selectedLayer.setStyle(ESTILO_BASE); } catch (e) { /* capa ya removida */ }
+            }
             selectedLayer = null;
         }
 
@@ -1721,58 +2111,151 @@ ${p._DEMO ? `
         }
 
 
+        // ====================================================================
+        // ARCHIVOS DEL PLANO
+        // --------------------------------------------------------------------
+        // ESTE ES EL UNICO LUGAR DEL PROGRAMA DONDE SE NOMBRAN LOS ARCHIVOS
+        // DEL PLANO. Si hay que cambiar uno, se cambia acá y en ningún otro
+        // lado.
+        //
+        // POR QUE ESTA ASI
+        //   El plano no es fijo: Catastro entrega cada tanto una versión nueva
+        //   con las parcelas que se fueron incorporando, y eso va a seguir
+        //   pasando. Antes el nombre de cada archivo estaba escrito a mano en
+        //   seis lugares distintos del código, cada uno con su propia forma de
+        //   buscarlo y de avisar si fallaba. Cambiar de versión obligaba a
+        //   encontrarlos todos, y alcanzaba con que se escapara uno para que el
+        //   visor cargara media capa vieja y media nueva sin avisar nada.
+        //
+        // COMO SE ACTUALIZA EL PLANO
+        //   1. Revisar el archivo nuevo:  node herramientas/revisar-plano.js <archivo>
+        //   2. Copiarlo a  web/datos/
+        //   3. Cambiar el nombre en la lista de acá abajo
+        //   4. Recargar el visor
+        //
+        //   El paso 1 no es opcional: avisa si al archivo le faltan padrones o
+        //   si trae polígonos sin datos, que son parcelas que después no se van
+        //   a poder consultar ni pintar. El procedimiento completo, con el
+        //   detalle de qué tiene que traer cada archivo, está en
+        //   docs/actualizar-el-plano.md
+        //
+        // QUE SIGNIFICA CADA CAMPO
+        //   archivo       nombre del archivo dentro de web/datos/
+        //   obligatorio   si falta, el visor no sirve (error). Si no lo es,
+        //                 simplemente esa capa no se ve (aviso).
+        //   alternativas  otros nombres con los que pudo haber venido, para que
+        //                 una instalación vieja siga andando.
+        // ====================================================================
+        const PLANO = {
+            parcelas: {
+                archivo: 'Merlo2026Parcelas-V1.json',
+                obligatorio: true,
+                descripcion: 'polígonos de las parcelas'
+            },
+            puntos: {
+                archivo: 'MerloPuntosNomeclaParcelasV2.json',
+                obligatorio: true,
+                descripcion: 'puntos con padrón y nomenclatura de cada parcela'
+            },
+            manzanas: {
+                archivo: 'MerloPuntosNomeclaManzanas.json',
+                obligatorio: false,
+                alternativas: ['MerloTextoNomeclaManzanas.json'],
+                descripcion: 'etiquetas de manzana'
+            },
+            barrios: {
+                archivo: 'MerloBarrios.json',
+                obligatorio: false,
+                descripcion: 'límites de los barrios'
+            },
+            edificado: {
+                archivo: 'Edificado2026.json',
+                obligatorio: false,
+                descripcion: 'superficie edificada'
+            }
+        };
+
+        /**
+         * Trae un archivo del plano y devuelve su contenido, o null si no está.
+         *
+         * Prueba cada nombre posible en web/datos/ y también en la raíz de
+         * web/, porque las instalaciones viejas tenían los archivos ahí.
+         *
+         * El `?t=` del final evita que el navegador sirva una copia guardada:
+         * sin eso, después de actualizar el plano se seguiría viendo el
+         * anterior hasta que alguien vaciara la caché a mano, y el síntoma
+         * -"actualicé y no cambió nada"- es muy difícil de diagnosticar.
+         */
+        async function traerDelPlano(clave) {
+            const cfg = PLANO[clave];
+            if (!cfg) { console.error(`❌ No hay ningún archivo declarado para "${clave}".`); return null; }
+
+            const nombres = [cfg.archivo].concat(cfg.alternativas || []);
+            const sinCache = `?t=${Date.now()}`;
+
+            for (const nombre of nombres) {
+                for (const ruta of [`datos/${nombre}`, nombre]) {
+                    try {
+                        const r = await fetch(CONFIG.url(ruta) + sinCache);
+                        if (!r.ok) continue;
+                        const datos = await r.json();
+                        const cuantos = (datos.features || []).length;
+                        console.log(`✅ ${cfg.descripcion}: ${cuantos} elementos — ${ruta}`);
+                        if (cuantos === 0) {
+                            console.warn(`⚠️ ${nombre} no tiene ningún elemento adentro. ¿Se exportó vacío?`);
+                        }
+                        return datos;
+                    } catch (e) {
+                        console.warn(`⚠️ ${ruta} no se pudo leer (¿archivo cortado o mal exportado?):`, e.message);
+                    }
+                }
+            }
+
+            const donde = nombres.join(' ni ');
+            if (cfg.obligatorio) {
+                console.error(`❌ Falta el archivo de ${cfg.descripcion}: no se encontró ${donde} en web/datos/. El visor no puede funcionar sin esto.`);
+            } else {
+                console.warn(`⚠️ Falta el archivo de ${cfg.descripcion} (${donde}): esa capa no se va a ver. El resto del visor funciona igual.`);
+            }
+            return null;
+        }
+
         async function loadData() {
             try {
-                const cacheBuster = `?t=${Date.now()}`;
-
-                console.log("📥 Descargando archivo estático de etiquetas con anti-caché:");
-                let resL = await fetch(CONFIG.url(`datos/MerloPuntosNomeclaParcelasV2.json`) + cacheBuster);
-                if (!resL.ok) resL = await fetch(CONFIG.url(`MerloPuntosNomeclaParcelasV2.json`) + cacheBuster);
-                
-                if (resL.ok) {
-                    const dataL = await resL.json();
+                const dataL = await traerDelPlano('puntos');
+                if (dataL) {
                     labelsData = dataL.features;
-                    console.log("✅ Carga Exitosa. Registros cargados en memoria labelsData:", labelsData.length);
                     // Índices: se arman una sola vez, acá. Todo lo que viene
                     // después (clics y búsquedas) los reutiliza.
                     construirIndicePuntos(labelsData);
                     construirIndiceBusqueda(labelsData);
-                } else {
-                    console.error("❌ Fallo crítico de carga: No se localizó 'MerloPuntosNomeclaParcelasV2.json'");
                 }
 
-                let resB = await fetch(CONFIG.url(`datos/MerloBarrios.json`) + cacheBuster);
-                if (!resB.ok) resB = await fetch(CONFIG.url(`MerloBarrios.json`) + cacheBuster);
-                if (resB.ok) {
-                    const dataB = await resB.json();
+                const dataB = await traerDelPlano('barrios');
+                if (dataB) {
                     L.geoJSON(dataB, {
                         style: { color: '#4338ca', weight: 2, fillOpacity: 0.1, dashArray: '5, 5' },
                         onEachFeature: (f, l) => { if (l.getBounds) f.center = l.getBounds().getCenter(); }
                     }).addTo(barriosLayer);
                     barriosData = dataB.features;
-                    barriosLabelsLayer.addTo(map); 
+                    barriosLabelsLayer.addTo(map);
                 }
 
-                try {
-                    let resE = await fetch(CONFIG.url(`datos/Edificado2026.json`) + cacheBuster);
-                    if (!resE.ok) resE = await fetch(CONFIG.url(`Edificado2026.json`) + cacheBuster);
-                    if (resE.ok) {
-                        const dataE = await resE.json();
-                        L.geoJSON(dataE, { style: { color: '#dc2626', weight: 1.2, fillColor: '#ef4444', fillOpacity: 0.25 } }).addTo(edificadoLayer);
-                    }
-                } catch (errEdificado) { console.warn("⚠️ No se pudo cargar la capa Edificado2026.json:", errEdificado); }
+                const dataE = await traerDelPlano('edificado');
+                if (dataE) {
+                    L.geoJSON(dataE, { style: { color: '#dc2626', weight: 1.2, fillColor: '#ef4444', fillOpacity: 0.25 } }).addTo(edificadoLayer);
+                }
 
-                let res = await fetch(CONFIG.url(`datos/Merlo2026Parcelas-V1.json`) + cacheBuster);
-                if (!res.ok) res = await fetch(CONFIG.url(`Merlo2026Parcelas-V1.json`) + cacheBuster);
-                
-                if (res.ok) {
-                    const data = await res.json();
+                const data = await traerDelPlano('parcelas');
+                if (data) {
                     L.geoJSON(data, {
                         style: { color: '#13f8bc', weight: 0.8, fillOpacity: 0.05, fillColor: '#10abb9' },
                         onEachFeature: (f, l) => {
-                            // Índice de manzanas: se arma mientras Leaflet crea
-                            // las capas, sin recorrer todo de nuevo después.
+                            // Índices de manzanas y de padrones: se arman
+                            // mientras Leaflet crea las capas, sin recorrer
+                            // todo de nuevo después.
                             registrarEnManzana(f, l);
+                            registrarEnPadron(f, l);
 
                             // --- EVENTO CLIC EN PARCELA REFACTORIZADO (SOPORTE PARA PH) ---
                             l.on('click', async (e) => {
@@ -1844,18 +2327,8 @@ ${p._DEMO ? `
                     }).addTo(geojsonLayer);
                 }
 
-                console.log("📥 Descargando nuevo archivo de Manzanas:");
-                let resM = await fetch(CONFIG.url(`datos/MerloPuntosNomeclaManzanas.json`) + cacheBuster);
-                if (!resM.ok) resM = await fetch(CONFIG.url(`MerloPuntosNomeclaManzanas.json`) + cacheBuster);
-                if (!resM.ok) resM = await fetch(CONFIG.url(`datos/MerloTextoNomeclaManzanas.json`) + cacheBuster);
-                
-                if (resM.ok) {
-                    const dataM = await resM.json();
-                    manzanasData = dataM.features || [];
-                    console.log("✅ Carga Exitosa. Nuevas Manzanas cargadas en memoria:", manzanasData.length);
-                } else {
-                    console.warn("⚠️ No se pudo localizar archivo de Manzanas.");
-                }
+                const dataM = await traerDelPlano('manzanas');
+                if (dataM) manzanasData = dataM.features || [];
 
                 const overlays = {
                     "<span class='text-sm font-bold text-slate-700 ml-1'>Barrios</span>": barriosLayer,

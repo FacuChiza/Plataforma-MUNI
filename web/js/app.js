@@ -342,23 +342,32 @@
         const ESTILO_MANZANA = { color: '#0ea5e9', weight: 1.6, fillOpacity: 0.12, fillColor: '#0ea5e9' };
         const ESTILO_SELECCION = { color: '#f59e0b', weight: 3, fillOpacity: 0.4, fillColor: '#f59e0b' };
 
-        // ------------------------------------------------------------------
-        // Hasta este zoom vale la pena alejarse para mostrar la manzana entera.
+        // ====================================================================
+        // CUANTO SE PUEDE ALEJAR EL MAPA PARA MOSTRAR LA MANZANA
+        // --------------------------------------------------------------------
+        // Medido en NIVELES DE ZOOM, no en un número de zoom fijo. Esto último
+        // fue un error que costó dos intentos, y vale la pena dejarlo anotado:
         //
-        // Estaba en 17, con el criterio de no alejar tanto que no se leyeran
-        // los nombres de las calles. Era demasiado estricto: medido sobre el
-        // plano, 141 manzanas de tamaño corriente -2.402 parcelas entre 16 y
-        // 17, y 1.027 más entre 15 y 16- quedaban sin mostrarse completas.
-        // Casos como una manzana de 16 parcelas que necesita zoom 16,8: se
-        // perdía por dos décimas.
+        //   El criterio era "mostrar la manzana entera salvo que haya que bajar
+        //   de tal zoom". Primero ese tope fue 17 y dejaba sin mostrar 141
+        //   manzanas de tamaño corriente -una de 16 parcelas se perdía por
+        //   necesitar 16,8-. Al bajarlo a 15 esas manzanas pasaron a mostrarse
+        //   completas, pero con un efecto peor: parcelas que se ven a zoom 19
+        //   quedaban encuadradas a 15, o sea a un dieciseisavo del ancho. La
+        //   manzana se veía entera y la parcela no se veía.
         //
-        // A zoom 15 y 16 las calles se siguen leyendo, así que el motivo
-        // original no se sostenía en ese rango. Con 15 quedan afuera solo 43
-        // manzanas, las genuinamente enormes de zona rural, donde alejarse
-        // hasta abarcarlas sí dejaría la parcela como un punto invisible.
-        // Esas igual se pintan de azul: si el operador se aleja, las ve.
-        // ------------------------------------------------------------------
-        const ZOOM_MINIMO_LEGIBLE = 15;
+        //   El problema es que un zoom fijo no dice nada por sí solo: que 15
+        //   sea mucho o poco depende del tamaño de la parcela. Lo que importa
+        //   es cuánto detalle se PIERDE al alejarse, y eso es una diferencia,
+        //   no un valor absoluto.
+        //
+        // Con 2 niveles, la parcela nunca baja de ocupar un cuarto del ancho de
+        // la pantalla. Medido sobre el plano, 1.013 de las 1.131 manzanas con
+        // más de una parcela entran dentro de ese margen y se muestran enteras;
+        // en las 118 restantes se centra en la parcela y alrededor se ve la
+        // parte de la manzana que entre, ya pintada de azul.
+        // ====================================================================
+        const MAXIMO_ALEJAMIENTO = 2;
 
         const indiceManzanas = new Map();
         let manzanaResaltada = [];
@@ -515,20 +524,32 @@
                 }
 
                 if (boundsManzana.isValid()) {
-                    const zoomManzana = map.getBoundsZoom(boundsManzana, false, L.point(60, 60));
-                    if (zoomManzana >= ZOOM_MINIMO_LEGIBLE) {
-                        // La manzana entra legible: se muestra completa.
+                    const margen = L.point(60, 60);
+
+                    // Zoom al que la parcela sola llena la pantalla: es el
+                    // máximo detalle que tiene sentido, y la referencia contra
+                    // la que se mide cuánto cuesta alejarse.
+                    const zoomParcela = Math.min(map.getBoundsZoom(boundsParcela, false, margen), 19);
+                    const zoomManzana = map.getBoundsZoom(boundsManzana, false, margen);
+
+                    if (zoomParcela - zoomManzana <= MAXIMO_ALEJAMIENTO) {
+                        // Alejarse hasta abarcar la manzana cuesta poco detalle:
+                        // se muestra completa, que es lo que más ayuda a
+                        // ubicarse.
                         objetivo = boundsManzana;
                     } else {
-                        // Manzana demasiado grande (típicamente zona rural, donde
-                        // "manzana" agrupa cientos de parcelas dispersas): se
-                        // encuadra la parcela con un margen proporcional CHICO.
-                        // Un margen grande acá es contraproducente: sobre una
-                        // parcela rural extensa alejaría tanto que no se leería
-                        // ninguna calle, que es justo lo que se quiere evitar.
+                        // La manzana es mucho más grande que la parcela (zona
+                        // rural, o manzanas que agrupan parcelas dispersas).
+                        // Mostrarla entera dejaría la parcela como un punto.
                         //
-                        // La manzana igual quedó pintada más arriba.
-                        objetivo = boundsParcela.pad(0.35);
+                        // Se centra en la parcela y se retrocede solo lo
+                        // permitido: la parcela se sigue viendo con buen tamaño
+                        // y alrededor aparece la parte de la manzana que entre,
+                        // ya pintada de azul más arriba.
+                        map.setView(boundsParcela.getCenter(), zoomParcela - MAXIMO_ALEJAMIENTO, {
+                            animate: !(opciones && opciones.animate === false)
+                        });
+                        return;
                     }
                 }
             } else {

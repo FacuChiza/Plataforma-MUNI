@@ -800,7 +800,9 @@
 
             let htmlTitulares;
             if (listaTitulares.length === 0) {
-                htmlTitulares = '<div class="campo campo-ancho"><span class="campo-vl campo-vacio">sin titular registrado</span></div>';
+                htmlTitulares = props.PH_SIN_NOMENCLATURA
+                    ? '<div class="campo campo-ancho"><span class="campo-vl campo-vacio">El plano no trae la nomenclatura de esta unidad funcional, así que no se puede buscar su titular. El resto de los datos corresponde al padrón ' + (props.NRO_RENTA || props.PADRON || '—') + '.</span></div>'
+                    : '<div class="campo campo-ancho"><span class="campo-vl campo-vacio">sin titular registrado</span></div>';
             } else {
                 htmlTitulares = '<div class="lista-titulares">' + listaTitulares.map((t, i) => {
                     const doc = [t.TIPO_DOCUMENTO, t.DOCUMENTO]
@@ -1861,9 +1863,22 @@ ${p._DEMO ? `
 
         // Esta función procesa la ejecución contra SQL después de que el Padrón (simple o PH) ha sido resuelto.
         async function procesarParcela(padronId, nomenclaturaId, f, l, propsAdicionales, subparcela) {
-            
-            // Reconstruir nomenclatura si está vacía
-            if (nomenclaturaId === "" && propsAdicionales.SECCION && propsAdicionales.MANZANA && (propsAdicionales.PARCELA_ME || propsAdicionales.PARCELA)) {
+
+            // ¿Es una sub-unidad de propiedad horizontal? subparcela trae el
+            // índice (1..29) para PH, y '' para una parcela simple.
+            const esSubPH = subparcela !== '' && subparcela !== null && subparcela !== undefined;
+            const subSinNomenclatura = esSubPH && nomenclaturaId === "";
+
+            // Reconstruir la nomenclatura SOLO para parcelas simples.
+            //
+            // En una parcela simple la nomenclatura reconstruida termina en
+            // 000000 y es la suya, así que sirve de respaldo. En una sub-unidad
+            // de PH, en cambio, 000000 es la parcela MADRE: reconstruirla haría
+            // que el titular se busque por la nomenclatura de la madre y la
+            // ficha muestre al dueño equivocado. Por eso acá se excluye el caso
+            // PH: si la unidad no trajo su nomenclatura propia, se deja vacía y
+            // la ficha lo aclara (ver más abajo y showModalData).
+            if (nomenclaturaId === "" && !esSubPH && propsAdicionales.SECCION && propsAdicionales.MANZANA && (propsAdicionales.PARCELA_ME || propsAdicionales.PARCELA)) {
                 const sec = String(propsAdicionales.SECCION).trim().toUpperCase().padStart(4, '0');
                 const manz = String(propsAdicionales.MANZANA).trim().padStart(6, '0');
                 const parc = String(propsAdicionales.PARCELA_ME || propsAdicionales.PARCELA).trim().padStart(6, '0');
@@ -1904,10 +1919,26 @@ ${p._DEMO ? `
             // Inyectamos la sub-parcela (Si proviene de una PH)
             currentFeatureProps.SUBPARCELA = subparcela;
 
+            // Si es una unidad de PH sin nomenclatura propia y aun así no vino
+            // ningún titular, la ficha lo explica en vez de dejar el titular en
+            // blanco sin motivo. (Si el backend tuviera activado el respaldo por
+            // padrón y encontró titular, este flag queda en false y no se avisa.)
+            const sinTitular = !currentFeatureProps.TITULARES || currentFeatureProps.TITULARES.length === 0;
+            currentFeatureProps.PH_SIN_NOMENCLATURA = subSinNomenclatura && sinTitular;
+
             showModalData(currentFeatureProps);
             // Encuadre con contexto: la parcela dentro de su manzana, con las
             // calles del entorno visibles (ver encuadrarParcela).
             encuadrarParcela(l, f);
+        }
+
+        // La nomenclatura PROPIA de una sub-unidad de PH, o '' si el plano no
+        // la trae. A propósito NO cae a la nomenclatura de la parcela madre:
+        // el plano solo tiene columnas de nomenclatura para las sub-unidades 1
+        // a 19; de la 20 en adelante no hay, y usar la de la madre haría que la
+        // ficha muestre el titular equivocado. Ver procesarParcela.
+        function nomenclaturaDeSub(props, i) {
+            return String((props && (props['NOMENCLAT' + i] || props['NOMENCLA' + i])) || '').trim();
         }
 
         // Abre el modal intermedio permitiendo al usuario elegir la sub-unidad (PH)
@@ -1939,16 +1970,14 @@ ${p._DEMO ? `
             closePhModal();
             const { f, l, propsAdicionales } = window.currentPHContext;
             
-            /* 
-             * NUEVO: Buscar nomenclatura específica de la sub-parcela (PH) seleccionada.
-             * Contemplamos la limitación de 10 caracteres en las columnas de los shapefiles,
-             * revisando tanto NOMENCLATx (1-9) como NOMENCLAx (10-50).
+            /*
+             * Nomenclatura PROPIA de la unidad elegida (NOMENCLATx para 1-9,
+             * NOMENCLAx para 10-19). Si el plano no la trae —sub-unidades de la
+             * 20 en adelante—, queda vacía a propósito: es preferible no traer
+             * titular a traer el de la parcela madre o el de otra unidad.
              */
-            let phNomencla = propsAdicionales[`NOMENCLAT${subparcela}`] || propsAdicionales[`NOMENCLA${subparcela}`] || '';
-            
-            // Usamos la nomenclatura específica de la unidad funcional. Si está vacía, usamos la general de la parcela (Fallback)
-            let nomenclaturaId = String(phNomencla || propsAdicionales.NOMENCLATU || propsAdicionales.NOMENCLA || f.properties.NOMENCLA || '').trim();
-            
+            const nomenclaturaId = nomenclaturaDeSub(propsAdicionales, subparcela);
+
             procesarParcela(padronId, nomenclaturaId, f, l, propsAdicionales, subparcela);
         }
 
@@ -2621,9 +2650,9 @@ ${p._DEMO ? `
 
                                 // 3. Ruteamos el flujo según el tipo de propiedad detectado
                                 if (isPH && explicitPhPadron) {
-                                    // Bypass inteligente: Va directo a procesar la unidad porque se buscó específicamente
-                                    // NUEVO: Priorizamos la nomenclatura específica de la unidad funcional encontrada
-                                    let nomenclaturaId = String(explicitPhPadron.nomencla || propsAdicionales.NOMENCLATU || propsAdicionales.NOMENCLA || f.properties.NOMENCLA || '').trim();
+                                    // Bypass inteligente: va directo a procesar la unidad porque se buscó específicamente.
+                                    // Solo su nomenclatura propia; sin caer a la de la madre (ver nomenclaturaDeSub).
+                                    const nomenclaturaId = nomenclaturaDeSub(propsAdicionales, explicitPhPadron.index);
                                     procesarParcela(explicitPhPadron.padron, nomenclaturaId, f, l, propsAdicionales, explicitPhPadron.index);
                                     window._searchedPadron = null; // Limpiar flag global
                                     

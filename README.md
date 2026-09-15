@@ -133,6 +133,7 @@ explica qué hace.
 | Los colores de las parcelas en el mapa      | `web/js/app.js` → constantes `ESTILO_*` (arriba)   |
 | La **plancheta** catastral (el PDF)         | `web/js/app.js` → función `imprimirFicha()`        |
 | El **libre de deuda** del Juzgado           | `web/js/app.js` → función `imprimirLibreDeuda()`   |
+| Propiedad horizontal (elegir sub-unidad)    | `web/js/app.js` → `mostrarModalPH()`, `seleccionarPH()`, `procesarParcela()` |
 | Los **filtros** (superficie, zona, barrio)  | `web/js/app.js` → `aplicarFiltros()` + `server.js` → `/api/filtrar` |
 | Qué datos trae la ficha de una parcela      | `servidor/server.js` → `/api/catastro`             |
 | **Cargar un plano nuevo** con más parcelas  | `web/js/app.js` → const `PLANO`, y `docs/actualizar-el-plano.md` |

@@ -134,6 +134,27 @@ const MAX_ROWS = parseInt(process.env.MAX_ROWS, 10) || 5000;
 // ============================================================================
 const MODO_DEMO = process.env.MODO_DEMO === 'true';
 
+// ============================================================================
+// RESPALDO: TITULAR POR PADRÓN (para sub-unidades de PH sin nomenclatura)
+// ----------------------------------------------------------------------------
+// El titular se busca por NOMENCLATURA. Funciona para casi todo, pero las
+// sub-unidades de propiedad horizontal de la 20 en adelante no tienen
+// nomenclatura propia en el plano (solo hay columnas hasta la 19), así que su
+// ficha queda sin titular. Son 34 unidades en unas pocas PH grandes.
+//
+// Estas unidades SÍ tienen su NRO_RENTA. Si la vista VI_CPAR_PROPIETARIOS
+// tuviera una columna NRO_RENTA, se podría traer el titular por ahí y el
+// problema desaparecería. HOY NO ESTÁ CONFIRMADO que esa columna exista (ver
+// herramientas/consultas-pendientes.sql).
+//
+// Por eso este respaldo viene APAGADO. Cuando en la Muni se confirme el nombre
+// de la columna, se activa poniendo PH_TITULAR_POR_PADRON=true en el .env.
+// Aun activado es conservador: solo consulta por padrón cuando la búsqueda por
+// nomenclatura no trajo NINGÚN titular, así que nunca pisa un dato correcto; y
+// va dentro de try/catch, así que si la columna no existiera, no rompe nada.
+// ============================================================================
+const PH_TITULAR_POR_PADRON = process.env.PH_TITULAR_POR_PADRON === 'true';
+
 /**
  * Padrones reales tomados del GeoJSON, para el modo de prueba.
  *
@@ -692,9 +713,39 @@ app.get('/api/catastro', async (req, res) => {
 
         const [resFrentes, resProp, resPadron, resDeuda] = await Promise.all([qFrentes, qPropiet, qPadron, qDeuda]);
 
+        // Titulares: normalmente los de la consulta por nomenclatura. Si esa no
+        // trajo ninguno y el respaldo por padrón está activado, se intenta por
+        // NRO_RENTA (ver PH_TITULAR_POR_PADRON). Es para las sub-unidades de PH
+        // sin nomenclatura propia. Solo actúa cuando no había titular, así que
+        // no puede pisar un resultado correcto.
+        let filasTitulares = resProp.recordset || [];
+        if (filasTitulares.length === 0 && PH_TITULAR_POR_PADRON && padron) {
+            try {
+                const resPorPadron = await activePool.request()
+                    .input('padron', sql.VarChar, padron)
+                    .query(`
+                        SELECT
+                            APELLIDO, NOMBRE, TIPO_DOCUMENTO, DOCUMENTO, CALLE,
+                            NUMERACION_CALLE AS NUMERACION, PISO, DEPARTAMENTO, BARRIO,
+                            CODIGO_POSTAL_REAL AS CODIGO_POS, LOCALIDAD, PROVINCIA
+                        FROM PROGRAM.dbo.VI_CPAR_PROPIETARIOS
+                        WHERE LTRIM(RTRIM(NRO_RENTA)) = @padron
+                        ORDER BY APELLIDO, NOMBRE, DOCUMENTO
+                    `);
+                filasTitulares = resPorPadron.recordset || [];
+                if (filasTitulares.length) {
+                    console.log(`ℹ️ Titular resuelto por padrón (${padron}): ${filasTitulares.length}. La nomenclatura no había traído ninguno.`);
+                }
+            } catch (e) {
+                // Lo más probable si falla: la vista no tiene la columna NRO_RENTA.
+                console.warn('⚠️ PH_TITULAR_POR_PADRON activo pero la consulta por padrón falló ' +
+                             '(¿VI_CPAR_PROPIETARIOS no tiene NRO_RENTA?). Se sigue sin titular. Detalle:', e.message);
+            }
+        }
+
         const rawData = {
             ...((resFrentes.recordset && resFrentes.recordset[0]) || {}),
-            ...((resProp.recordset && resProp.recordset[0]) || {}),
+            ...((filasTitulares && filasTitulares[0]) || {}),
             ...((resPadron.recordset && resPadron.recordset[0]) || {}),
             ...((resDeuda.recordset && resDeuda.recordset[0]) || {})
         };
@@ -711,7 +762,7 @@ app.get('/api/catastro', async (req, res) => {
         // igual, y la ficha nueva usa el array. Es un cambio aditivo: no rompe
         // el contrato de la API que ya existía.
         // --------------------------------------------------------------------
-        consolidado.TITULARES = (resProp.recordset || []).map((t) => {
+        consolidado.TITULARES = (filasTitulares || []).map((t) => {
             const fila = {};
             for (const clave in t) fila[clave.toUpperCase()] = t[clave];
             return fila;

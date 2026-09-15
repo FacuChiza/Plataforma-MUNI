@@ -185,6 +185,45 @@ ORDER BY zonas_distintas;
 GO
 
 
+/* ############################################################################
+   PREGUNTA 4
+   ############################################################################
+
+   ¿La vista de propietarios tiene una columna de N° de Renta (padrón)?
+
+   POR QUÉ IMPORTA
+     El titular se busca hoy por NOMENCLATURA. Las sub-unidades de propiedad
+     horizontal de la número 20 en adelante no tienen nomenclatura propia en el
+     plano (solo hay columnas hasta la 19), así que su ficha queda sin titular.
+     Son 34 unidades, en unas pocas PH grandes.
+
+     Si esta vista tuviera una columna con el NRO_RENTA de cada unidad, el
+     visor podría traer el titular por ahí y esos casos se resolverían solos.
+     Ya está programado: se activa con PH_TITULAR_POR_PADRON=true en el .env,
+     PERO recién cuando se confirme el nombre exacto de la columna.
+
+   QUÉ HACER CON EL RESULTADO
+     Mirar en la lista si aparece una columna tipo NRO_RENTA / NRO_RENTAS /
+     PADRON. Si el nombre no es exactamente NRO_RENTA, avisar: hay que ajustar
+     esa palabra en la consulta del backend (server.js, buscar
+     PH_TITULAR_POR_PADRON) antes de activar el respaldo.
+*/
+SELECT COLUMN_NAME, DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'VI_CPAR_PROPIETARIOS'
+ORDER BY ORDINAL_POSITION;
+GO
+
+/* Si aparece una columna de padrón, esta consulta muestra si trae el titular
+   de una unidad de PH que hoy queda sin titular (reemplazar el padrón de
+   ejemplo por uno real de los que da herramientas/revisar-plano.js). Si
+   devuelve filas, el respaldo por padrón va a funcionar. */
+-- SELECT APELLIDO, NOMBRE, DOCUMENTO
+-- FROM dbo.VI_CPAR_PROPIETARIOS
+-- WHERE LTRIM(RTRIM(NRO_RENTA)) = '13-953657';
+-- GO
+
+
 /* ============================================================================
    FIN
 
